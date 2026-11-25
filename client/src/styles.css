@@ -84,6 +84,9 @@ h1 { font-size: clamp(30px, 4.4vw, 50px); letter-spacing: -0.02em; line-height: 
 .contenido-panel { padding: clamp(20px, 3vw, 40px); }
 .kpi b { display: block; font-size: clamp(26px, 3vw, 34px); white-space: nowrap; }
 
+/* Herramientas de IA en el panel */
+.caja-ia { border: 1px dashed #9fd9bd; background: #f3fbf7; border-radius: 12px; padding: 14px 16px; }
+
 /* Avisos flotantes */
 .avisos { position: fixed; right: 16px; bottom: 16px; z-index: 1080; display: flex; flex-direction: column; gap: 8px; max-width: min(360px, calc(100% - 32px)); }
 .aviso { background: #0c1b21; color: #fff; padding: 12px 16px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); }

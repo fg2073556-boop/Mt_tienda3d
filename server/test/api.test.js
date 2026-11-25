@@ -146,3 +146,79 @@ test('asesor: recomienda productos en existencia sin llave de Gemini', async () 
   assert.equal(r.body.fuente, 'reglas');
   assert.ok(r.body.productos.some((p) => p.nombre.includes('CAD')));
 });
+
+/* ---------- IA (Gemini simulado: no se gasta cuota en las pruebas) ---------- */
+function simularGemini(respuestaJson, status = 200) {
+  const real = globalThis.fetch;
+  const llamadas = [];
+  globalThis.fetch = async (url, opts) => {
+    if (!String(url).includes('generativelanguage.googleapis.com')) return real(url, opts);
+    llamadas.push(JSON.parse(opts.body));
+    return new Response(
+      JSON.stringify(status === 200 ? { candidates: [{ content: { parts: [{ text: JSON.stringify(respuestaJson) }] } }] } : { error: { message: 'x' } }),
+      { status, headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+  return { llamadas, restaurar: () => { globalThis.fetch = real; } };
+}
+
+test('IA: sin llave avisa que falta configurarla', async () => {
+  delete process.env.GEMINI_API_KEY;
+  const admin = await login('admin@test.mx');
+  const r = await api('POST', '/api/admin/ia/descripcion', { token: admin, body: { nombre: 'Mouse gamer' } });
+  assert.equal(r.status, 503);
+  assert.match(r.body.error, /GEMINI_API_KEY/);
+});
+
+test('IA: el vendedor no puede usar las herramientas de IA', async () => {
+  const vendedor = await login('vende@test.mx');
+  assert.equal((await api('GET', '/api/admin/ia/estado', { token: vendedor })).status, 403);
+});
+
+test('IA: genera descripción con Gemini', async () => {
+  process.env.GEMINI_API_KEY = 'llave-falsa';
+  const g = simularGemini({ descripcion: 'Mouse preciso y cómodo para jugar o trabajar todo el día.' });
+  try {
+    const admin = await login('admin@test.mx');
+    const r = await api('POST', '/api/admin/ia/descripcion', { token: admin, body: { nombre: 'Mouse gamer', categoria: 'Equipo' } });
+    assert.equal(r.status, 200);
+    assert.match(r.body.descripcion, /Mouse preciso/);
+    assert.match(g.llamadas[0].contents[0].parts[0].text, /Mouse gamer/);
+  } finally { g.restaurar(); delete process.env.GEMINI_API_KEY; }
+});
+
+test('IA: resume una ficha técnica en PDF', async () => {
+  process.env.GEMINI_API_KEY = 'llave-falsa';
+  const g = simularGemini({ producto: 'RTX 4060', resumen: 'Tarjeta para juegos en 1080p.', descripcion_tienda: 'Ideal para jugar.', especificaciones: [{ nombre: 'Memoria', valor: '8 GB' }] });
+  try {
+    const admin = await login('admin@test.mx');
+    const form = new FormData();
+    form.append('ficha', new Blob(['%PDF-1.4 prueba'], { type: 'application/pdf' }), 'ficha.pdf');
+    const res = await fetch(`${base}/api/admin/ia/resumir-ficha`, { method: 'POST', headers: { Authorization: `Bearer ${admin}` }, body: form });
+    const body = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(body.especificaciones[0].valor, '8 GB');
+    assert.equal(g.llamadas[0].contents[0].parts[0].inlineData.mimeType, 'application/pdf');
+
+    const noPdf = new FormData();
+    noPdf.append('ficha', new Blob(['hola'], { type: 'text/plain' }), 'nota.txt');
+    const mal = await fetch(`${base}/api/admin/ia/resumir-ficha`, { method: 'POST', headers: { Authorization: `Bearer ${admin}` }, body: noPdf });
+    assert.equal(mal.status, 422);
+  } finally { g.restaurar(); delete process.env.GEMINI_API_KEY; }
+});
+
+test('IA: el asesor usa Gemini y si falla cae a reglas', async () => {
+  process.env.GEMINI_API_KEY = 'llave-falsa';
+  const cad = (await pool.query(`SELECT id FROM producto WHERE slug = 'software-cad-educativo-1-ano'`)).rows[0].id;
+  let g = simularGemini({ mensaje: 'Te recomiendo el software CAD.', ids: [cad] });
+  try {
+    const r = await api('POST', '/api/asesor', { body: { necesidad: 'necesito dibujar planos' } });
+    assert.equal(r.body.fuente, 'gemini');
+    assert.deepEqual(r.body.productos.map((p) => p.id), [cad]);
+  } finally { g.restaurar(); }
+  g = simularGemini(null, 429);
+  try {
+    const r = await api('POST', '/api/asesor', { body: { necesidad: 'quiero jugar' } });
+    assert.equal(r.body.fuente, 'reglas');
+  } finally { g.restaurar(); delete process.env.GEMINI_API_KEY; }
+});

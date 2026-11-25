@@ -8,6 +8,7 @@ import asesorRoutes from './routes/asesor.js';
 import authRoutes from './routes/auth.js';
 import catalogoRoutes from './routes/catalogo.js';
 import pedidosRoutes from './routes/pedidos.js';
+import iaRoutes from './routes/ia.js';
 import { HttpError } from './errors.js';
 
 /** Crea la aplicación Express (separada de index.js para poder probarla) */
@@ -26,6 +27,7 @@ export function crearApp() {
   app.use('/api', catalogoRoutes);
   app.use('/api', pedidosRoutes);
   app.use('/api', asesorRoutes);
+  app.use('/api/admin/ia', iaRoutes);
   app.use('/api/admin', adminRoutes);
 
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Esa ruta de la API no existe.')));
@@ -35,7 +37,7 @@ export function crearApp() {
   app.use((err, _req, res, _next) => {
     if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, ...(err.details && { detalles: err.details }) });
     if (err instanceof multer.MulterError) {
-      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'El archivo pesa más de 20 MB.' : 'No se pudo subir el archivo.';
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? 'El archivo pesa demasiado (fotos y modelos: 20 MB, fichas PDF: 15 MB).' : 'No se pudo subir el archivo.';
       return res.status(422).json({ error: msg });
     }
     if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'La petición no es JSON válido.' });
