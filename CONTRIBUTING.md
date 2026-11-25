@@ -29,7 +29,9 @@ git pull                              # bajar lo último del equipo
 git checkout -b tunombre/tarea        # crear tu rama, ej. ana/modelo-gpu
 ```
 
-Si alguien agregó paquetes nuevos, vuelve a correr `npm install` dentro de `server` y de `client`. Para arrancar el proyecto sigue los pasos del README.
+Si alguien agregó paquetes nuevos, vuelve a correr `npm run instalar` en la carpeta del proyecto. Para arrancarlo: `npm run bd` y luego `npm run dev` (la primera vez sigue los pasos del README).
+
+Tus tareas y lo que se revisa para aceptarlas están en `docs/tareas-equipo.md`.
 
 Haz tu trabajo: agrega modelos, edita el CSV, escribe documentación, etc.
 

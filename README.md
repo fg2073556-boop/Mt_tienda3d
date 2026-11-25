@@ -164,3 +164,14 @@ Los productos se reconocen por nombre: si existe se actualiza, si no se crea. Na
 | Pruebas y documentación | Por asignar | `docs/pruebas.md`, manual de usuario, reporte de errores |
 
 Lee [CONTRIBUTING.md](CONTRIBUTING.md) antes de subir tu primer cambio.
+
+## Documentación
+
+| Documento | Para qué |
+|---|---|
+| [docs/arquitectura.md](docs/arquitectura.md) | Diagramas del sistema, modelo de datos, flujo de compra y decisiones |
+| [docs/manual-usuario.md](docs/manual-usuario.md) | Cómo se usa la tienda y el panel, con capturas |
+| [docs/guion-demo.md](docs/guion-demo.md) | Demo de 3 minutos, plan B y preguntas de los jueces |
+| [docs/pruebas.md](docs/pruebas.md) | Lista de pruebas manuales |
+| [docs/tareas-equipo.md](docs/tareas-equipo.md) | Tareas por rol, listas para convertir en issues |
+| [docs/prompts-3d.md](docs/prompts-3d.md) | Prompts para generar las piezas 3D |

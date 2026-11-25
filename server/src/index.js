@@ -18,8 +18,9 @@ try {
 }
 
 const port = Number(process.env.PORT || 3001);
-const servidor = crearApp().listen(port, () => console.log(`API de M&T lista en http://localhost:${port}`));
-servidor.on('error', (error) => {
+// En Express 5 el callback de listen también recibe el error si no se pudo abrir el puerto
+crearApp().listen(port, (error) => {
+  if (!error) return console.log(`API de M&T lista en http://localhost:${port}`);
   if (error.code === 'EADDRINUSE') {
     console.error(`El puerto ${port} está ocupado por otro programa.`);
     console.error('Ciérralo, o cambia PORT en server/.env (el frontend lo detecta solo) y vuelve a arrancar.');
