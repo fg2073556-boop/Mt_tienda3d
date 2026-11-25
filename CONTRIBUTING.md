@@ -17,8 +17,8 @@ git config --global user.email "tu-correo@ejemplo.com"
 5. Descarga el proyecto (cambia la dirección por la del repositorio):
 
 ```bash
-git clone https://github.com/fg2073556-boop/mt_tienda3d.git
-cd mt_tienda3d
+git clone https://github.com/fg2073556-boop/Mt_tienda3d.git
+cd Mt_tienda3d
 ```
 
 ## 2. Cada vez que vayas a trabajar
