@@ -1,0 +1,24 @@
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+# Editores
+.vscode/
+.idea/
+# Laravel / PHP
+/app/vendor/
+/app/node_modules/
+/app/.env
+/app/storage/*.key
+/app/public/storage
+/app/public/hot
+# Node
+node_modules/
+npm-debug.log*
+# Llaves y secretos (NUNCA subirlos)
+.env
+*.key
+credenciales*.json
+# Archivos de Blender temporales
+*.blend1
+*.blend2
