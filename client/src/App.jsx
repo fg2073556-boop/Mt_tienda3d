@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import TiendaLayout from './components/TiendaLayout.jsx';
 import RutaProtegida from './components/RutaProtegida.jsx';
@@ -9,12 +10,12 @@ import Gracias from './pages/Gracias.jsx';
 import Seguimiento from './pages/Seguimiento.jsx';
 import Login from './pages/Login.jsx';
 import NoEncontrado from './pages/NoEncontrado.jsx';
-import PanelLayout from './pages/panel/PanelLayout.jsx';
-import Resumen from './pages/panel/Resumen.jsx';
-import Productos from './pages/panel/Productos.jsx';
-import ProductoForm from './pages/panel/ProductoForm.jsx';
-import Pedidos from './pages/panel/Pedidos.jsx';
-import PedidoDetalle from './pages/panel/PedidoDetalle.jsx';
+const PanelLayout = lazy(() => import('./pages/panel/PanelLayout.jsx'));
+const Resumen = lazy(() => import('./pages/panel/Resumen.jsx'));
+const Productos = lazy(() => import('./pages/panel/Productos.jsx'));
+const ProductoForm = lazy(() => import('./pages/panel/ProductoForm.jsx'));
+const Pedidos = lazy(() => import('./pages/panel/Pedidos.jsx'));
+const PedidoDetalle = lazy(() => import('./pages/panel/PedidoDetalle.jsx'));
 
 export default function App() {
   return (
@@ -31,8 +32,8 @@ export default function App() {
         <Route path="*" element={<NoEncontrado />} />
       </Route>
 
-      {/* Panel con menú lateral por rol */}
-      <Route path="panel" element={<RutaProtegida><PanelLayout /></RutaProtegida>}>
+      {/* Panel con menú lateral por rol (se descarga solo cuando el personal entra) */}
+      <Route path="panel" element={<RutaProtegida><Suspense fallback={<p className="p-4 text-body-secondary">Cargando panel…</p>}><PanelLayout /></Suspense></RutaProtegida>}>
         <Route index element={<Resumen />} />
         <Route path="productos" element={<Productos />} />
         <Route path="productos/nuevo" element={<RutaProtegida roles={['administrador']}><ProductoForm /></RutaProtegida>} />

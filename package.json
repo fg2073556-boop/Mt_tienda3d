@@ -1,0 +1,20 @@
+{
+  "name": "mt-tienda-3d",
+  "private": true,
+  "description": "Tienda virtual 3D de M&T (reto COM-1)",
+  "type": "module",
+  "scripts": {
+    "preparar": "node scripts/preparar.js",
+    "instalar": "npm install && npm install --prefix server && npm install --prefix client",
+    "bd": "docker compose up -d",
+    "bd:detener": "docker compose down",
+    "crear-usuarios": "npm run crear-usuarios --prefix server",
+    "importar-catalogo": "npm run importar-catalogo --prefix server",
+    "dev": "concurrently -n api,web -c green,cyan \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "test": "npm test --prefix server",
+    "build": "npm run build --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}

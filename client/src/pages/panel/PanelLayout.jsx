@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { AvisoProvider } from '../../components/Aviso.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -32,7 +33,9 @@ export default function PanelLayout() {
           <button type="button" className="btn btn-outline-light btn-sm mt-auto" onClick={() => { logout(); navigate('/'); }}>Cerrar sesión</button>
         </aside>
         <main className="contenido-panel">
-          <Outlet />
+          <Suspense fallback={<p className="text-body-secondary">Cargando…</p>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </AvisoProvider>

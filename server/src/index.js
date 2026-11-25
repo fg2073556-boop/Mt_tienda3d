@@ -18,4 +18,13 @@ try {
 }
 
 const port = Number(process.env.PORT || 3001);
-crearApp().listen(port, () => console.log(`API de M&T lista en http://localhost:${port}`));
+const servidor = crearApp().listen(port, () => console.log(`API de M&T lista en http://localhost:${port}`));
+servidor.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`El puerto ${port} está ocupado por otro programa.`);
+    console.error('Ciérralo, o cambia PORT en server/.env (el frontend lo detecta solo) y vuelve a arrancar.');
+  } else {
+    console.error(error);
+  }
+  process.exit(1);
+});

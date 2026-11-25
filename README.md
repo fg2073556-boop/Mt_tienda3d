@@ -14,43 +14,48 @@ Tecnologías: **React + Bootstrap**, **Node.js + Express** (API REST con JWT) y 
 | Panel del vendedor | Ver pedidos y cambiar su estado | Listo y probado |
 | Extra: vista 3D | Escena con la PC desarmable; acepta modelos .glb | Listo y probado |
 | Extra: asesor con Gemini | Recomienda equipo según el uso del cliente | Listo (necesita llave de API) |
+| Extra: IA en el panel | Redacta descripciones y resume fichas técnicas en PDF | Listo (necesita llave de API) |
+| Extra: seguimiento | El cliente consulta su pedido con folio y correo | Listo y probado |
 
-## Cómo correrlo (primera vez)
+## Cómo correrlo
 
-Necesitas **Docker Desktop**, **Node.js 20+** y **Git**.
+Necesitas **Docker Desktop** (abierto), **Node.js 20+** y **Git**.
 
-**1. Base de datos**
-
-```bash
-cp .env.example .env              # en Windows: copy .env.example .env
-docker compose up -d
-```
-
-La primera vez, Docker crea las tablas (`database/schema.sql`) y carga el catálogo de ejemplo (`database/seed.sql`). Usa el puerto **5433** para no chocar con otro PostgreSQL que ya tengas en el 5432.
-
-**2. Backend** (en otra terminal)
+**La primera vez** (en la carpeta del proyecto):
 
 ```bash
-cd server
-npm install
-cp .env.example .env              # pon la MISMA contraseña que en el .env de la raíz
-npm run crear-usuarios            # crea la cuenta de administrador y la de vendedor
-npm run dev                       # API en http://localhost:3001
+npm run instalar          # instala todo (raíz, server y client)
+npm run preparar          # crea los .env con contraseñas aleatorias y te muestra las del panel
+npm run bd                # levanta PostgreSQL en Docker y carga el catálogo de ejemplo
+npm run crear-usuarios    # crea las cuentas de administrador y vendedor
 ```
 
-**3. Frontend** (en otra terminal)
+**Cada vez que vayas a trabajar:**
 
 ```bash
-cd client
-npm install
-npm run dev                       # tienda en http://localhost:5173
+npm run bd                # si Docker no la tiene prendida
+npm run dev               # arranca la API y la tienda juntas
 ```
 
-El panel está en http://localhost:5173/login con las cuentas que pusiste en `server/.env`.
+Abre http://localhost:5173. El panel está en http://localhost:5173/login (las contraseñas están en `server/.env`).
+
+### Comandos útiles
+
+| Comando | Qué hace |
+|---|---|
+| `npm run dev` | Arranca API (puerto 3001) y tienda (puerto 5173) en una sola terminal |
+| `npm run importar-catalogo` | Carga `datos/catalogo.csv` a la base (agrega `-- --prueba` para solo ver los cambios) |
+| `npm run crear-usuarios` | Crea o actualiza las cuentas del panel con los datos de `server/.env` |
+| `npm test` | Corre las pruebas de la API (ver sección Pruebas) |
+| `npm run bd:detener` | Apaga la base de datos de Docker |
+
+**Si el puerto 3001 está ocupado** por otro programa, la API te avisa. Cambia `PORT` en `server/.env` (por ejemplo a 3002); la tienda lo detecta sola.
 
 ## Estructura
 
 ```
+package.json           Comandos para todo el proyecto (npm run dev, preparar, bd…)
+scripts/preparar.js    Crea los .env con contraseñas que coinciden
 docker-compose.yml     PostgreSQL 16 en Docker
 .env.example           Usuario y contraseña de la base (para Docker)
 database/
@@ -60,10 +65,10 @@ server/                API REST (Node + Express)
   src/index.js         Arranque
   src/app.js           Rutas y manejo de errores
   src/db.js            Conexión a PostgreSQL y transacciones
-  src/routes/          catalogo, pedidos, asesor, auth, admin
-  src/services/        stock.js (alertas) y asesor.js (Gemini)
+  src/routes/          catalogo, pedidos, asesor, auth, admin, ia
+  src/services/        stock.js (alertas), gemini.js, asesor.js, catalogo-csv.js
   src/middleware/      auth.js: JWT y permisos por rol
-  scripts/             crear-usuarios.js
+  scripts/             crear-usuarios.js, importar-catalogo.js
   test/                Pruebas de los 4 módulos
   uploads/             Fotos y modelos .glb que sube el panel
 client/                Frontend (React + Vite + Bootstrap)
@@ -92,11 +97,14 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 | `GET /api/piezas` | Público | Producto de cada pieza de la escena 3D |
 | `POST /api/pedidos` | Público | Compra todo-o-nada; descuenta existencias |
 | `POST /api/asesor` | Público | Recomendación con Gemini (o reglas sin llave) |
+| `POST /api/pedidos/seguimiento` | Público | Estado del pedido con folio y correo |
 | `POST /api/auth/login` | Público | Devuelve el token JWT |
 | `GET /api/admin/resumen` | Ambos roles | Ventas del día, pedidos, alertas |
 | `POST/PUT/DELETE /api/admin/productos` | Administrador | Alta, edición (con foto y .glb) y baja |
 | `PATCH /api/admin/productos/:id/existencias` | Ambos roles | Sumar o restar existencias |
 | `PATCH /api/admin/pedidos/:id/estado` | Ambos roles | Cambiar estado; cancelar regresa piezas |
+| `POST /api/admin/ia/descripcion` | Administrador | Redacta la descripción de un producto con Gemini |
+| `POST /api/admin/ia/resumir-ficha` | Administrador | Explica una ficha técnica en PDF con Gemini |
 
 ## Reglas de negocio
 
@@ -116,6 +124,34 @@ docker exec -it mt_tienda_db createdb -U mt_admin mt_tienda_test
 cd server
 DB_NAME=mt_tienda_test npm test              # PowerShell: $env:DB_NAME="mt_tienda_test"; npm test
 ```
+
+Son 13 pruebas: catálogo, compra, stock, roles, pedidos, seguimiento e IA. Gemini se simula en las pruebas, así que no gastan cuota.
+
+## Usar la IA (Gemini)
+
+1. Crea tu llave en https://aistudio.google.com
+2. Pégala en `GEMINI_API_KEY` dentro de `server/.env` y reinicia `npm run dev`.
+
+Qué usa la IA en el proyecto, uno por cada reto del hackathon:
+
+| Reto | Dónde |
+|---|---|
+| Comprender el lenguaje y asesorar | Asesor M&T en la tienda |
+| Analizar información compleja | Panel → editar producto → Analizar ficha técnica (PDF) |
+| Generar contenido | Panel → editar producto → Redactar con IA |
+
+Si el servidor dice que el modelo no existe, cambia `GEMINI_MODEL` en `server/.env` por uno disponible para tu llave.
+
+## Catálogo desde la hoja de cálculo
+
+El responsable de catálogo edita `datos/catalogo.csv` (se abre con Excel o Google Sheets; guárdalo como CSV UTF-8). Las fotos van en `assets/imagenes/productos/` y en la columna `imagen` se pone solo el nombre del archivo. Luego:
+
+```bash
+npm run importar-catalogo -- --prueba    # revisa qué va a cambiar
+npm run importar-catalogo                # lo aplica
+```
+
+Los productos se reconocen por nombre: si existe se actualiza, si no se crea. Nada se borra.
 
 ## Equipo y responsabilidades
 

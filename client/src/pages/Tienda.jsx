@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import Escena3D, { NOMBRES } from '../components/Escena3D.jsx';
+import { NOMBRES } from '../lib/piezas.js';
+
+// three.js pesa: se descarga aparte mientras se muestra el resto de la tienda
+const Escena3D = lazy(() => import('../components/Escena3D.jsx'));
 import TarjetaProducto from '../components/TarjetaProducto.jsx';
 import Insignia from '../components/Insignia.jsx';
 import { useAviso } from '../components/Aviso.jsx';
@@ -45,7 +48,9 @@ export default function Tienda() {
           <p className="intro">Equipo, software y mobiliario para estudiantes, ingenieros y empresas de la región. Gira la escena, desarma la torre y toca cualquier pieza para ver precio y existencias.</p>
           {error && <div className="alert alert-danger mt-3">{error}</div>}
           <div className="rejilla-escena" ref={escenaRef}>
-            <Escena3D piezas={piezas} seleccion={sel} onSeleccion={setSel} />
+            <Suspense fallback={<div className="escena cargando-escena">Cargando la escena 3D…</div>}>
+              <Escena3D piezas={piezas} seleccion={sel} onSeleccion={setSel} />
+            </Suspense>
             <Ficha pieza={sel} producto={sel && piezas[sel]} disponibles={piezas} onElegir={setSel} />
           </div>
         </div>

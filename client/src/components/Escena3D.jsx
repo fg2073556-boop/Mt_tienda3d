@@ -2,11 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export const NOMBRES = {
-  gab: 'Gabinete', cpu: 'Procesador', cooler: 'Enfriamiento', ram: 'Memoria RAM', gpu: 'Tarjeta de video',
-  ssd: 'Almacenamiento SSD', psu: 'Fuente de poder', fans: 'Ventiladores', monitor: 'Monitor', kb: 'Teclado y mouse', desk: 'Escritorio',
-};
-export const INTERIOR = ['cpu', 'cooler', 'ram', 'gpu', 'ssd', 'psu', 'fans'];
+import { INTERIOR, NOMBRES } from '../lib/piezas.js';
 const COLORES = [
   { c: '#36e39a', n: 'menta' }, { c: '#22d3ee', n: 'cian' }, { c: '#e879f9', n: 'magenta' }, { c: '#fbbf24', n: 'ámbar' },
   { c: 'arcoiris', n: 'arcoíris', bg: 'conic-gradient(#f43f5e,#fbbf24,#36e39a,#22d3ee,#a78bfa,#f43f5e)' },
