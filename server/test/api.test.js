@@ -1,0 +1,148 @@
+/**
+ * Pruebas de los 4 módulos obligatorios del reto contra una base PostgreSQL de PRUEBAS.
+ *
+ * Crea una base vacía cuyo nombre termine en _test (por seguridad, no corre sobre otra):
+ *   docker exec -it mt_tienda_db createdb -U mt_admin mt_tienda_test
+ * y corre:
+ *   DB_NAME=mt_tienda_test npm test        (Linux / Git Bash)
+ *   $env:DB_NAME="mt_tienda_test"; npm test (PowerShell)
+ */
+import dotenv from 'dotenv';
+dotenv.config({ quiet: true });
+process.env.JWT_SECRET ||= 'secreto-de-pruebas';
+
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import bcrypt from 'bcryptjs';
+
+if (!String(process.env.DB_NAME).endsWith('_test')) {
+  throw new Error(`Por seguridad las pruebas solo corren en una base que termine en _test (DB_NAME=${process.env.DB_NAME}).`);
+}
+
+const { pool } = await import('../src/db.js');
+const { crearApp } = await import('../src/app.js');
+
+let server;
+let base;
+const api = async (method, ruta, { body, token } = {}) => {
+  const res = await fetch(base + ruta, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  return { status: res.status, body: text ? JSON.parse(text) : null };
+};
+const idDe = async (slug) => (await pool.query('SELECT id FROM producto WHERE slug = $1', [slug])).rows[0].id;
+const existencias = async (slug) => (await pool.query('SELECT existencias FROM producto WHERE slug = $1', [slug])).rows[0].existencias;
+const login = async (correo) => (await api('POST', '/api/auth/login', { body: { correo, password: 'clave-de-prueba' } })).body.token;
+
+before(async () => {
+  await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+  await pool.query(await fs.readFile(new URL('../../database/schema.sql', import.meta.url), 'utf8'));
+  await pool.query(await fs.readFile(new URL('../../database/seed.sql', import.meta.url), 'utf8'));
+  const hash = await bcrypt.hash('clave-de-prueba', 4);
+  await pool.query(
+    `INSERT INTO usuario (nombre, correo, password_hash, rol) VALUES ('Admin', 'admin@test.mx', $1, 'administrador'), ('Vende', 'vende@test.mx', $1, 'vendedor')`,
+    [hash],
+  );
+  server = crearApp().listen(0);
+  base = `http://127.0.0.1:${server.address().port}`;
+});
+
+after(async () => {
+  server?.close();
+  await pool.end();
+});
+
+test('catálogo: lista productos activos, filtra y da piezas 3D', async () => {
+  const todos = await api('GET', '/api/productos');
+  assert.equal(todos.status, 200);
+  assert.equal(todos.body.length, 17);
+  const comp = await api('GET', '/api/productos?categoria=componentes');
+  assert.ok(comp.body.every((p) => p.categoria.slug === 'componentes'));
+  const piezas = await api('GET', '/api/piezas');
+  assert.equal(piezas.body.gpu.nombre, 'Tarjeta de video RTX 4060 8 GB');
+  assert.equal(typeof piezas.body.gpu.precio, 'number');
+});
+
+test('pago: no vende más de lo que hay y no guarda nada', async () => {
+  const gpu = await idDe('tarjeta-de-video-rtx-4060-8-gb');
+  const r = await api('POST', '/api/pedidos', { body: {
+    cliente_nombre: 'Cliente', cliente_correo: 'c@ejemplo.com', direccion: 'Tepeaca', metodo_pago: 'tienda',
+    items: [{ producto_id: gpu, cantidad: 3 }],
+  } });
+  assert.equal(r.status, 409);
+  assert.equal(await existencias('tarjeta-de-video-rtx-4060-8-gb'), 2);
+});
+
+test('pago: crea pedido, descuenta stock y genera alerta de agotado', async () => {
+  const gpu = await idDe('tarjeta-de-video-rtx-4060-8-gb');
+  const ram = await idDe('memoria-32-gb-ddr5-rgb-2x16');
+  const r = await api('POST', '/api/pedidos', { body: {
+    cliente_nombre: 'Cliente de prueba', cliente_correo: 'cliente@ejemplo.com', direccion: 'Tepeaca, Puebla',
+    metodo_pago: 'tarjeta_prueba', items: [{ producto_id: gpu, cantidad: 2 }, { producto_id: ram, cantidad: 1 }],
+  } });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.folio, 'MT-00005');
+  assert.equal(r.body.estado, 'pagado');
+  assert.equal(r.body.total, 6999 * 2 + 2199);
+  assert.equal(await existencias('tarjeta-de-video-rtx-4060-8-gb'), 0);
+  const alertas = await pool.query(`SELECT tipo FROM alerta_stock WHERE producto_id = $1`, [gpu]);
+  assert.deepEqual(alertas.rows.map((a) => a.tipo), ['agotado']);
+});
+
+test('panel: pide sesión y respeta roles', async () => {
+  assert.equal((await api('GET', '/api/admin/resumen')).status, 401);
+  const vendedor = await login('vende@test.mx');
+  assert.equal((await api('GET', '/api/admin/resumen', { token: vendedor })).status, 200);
+  assert.equal((await api('DELETE', `/api/admin/productos/${await idDe('ssd-nvme-1-tb')}`, { token: vendedor })).status, 403);
+  const mala = await api('POST', '/api/auth/login', { body: { correo: 'vende@test.mx', password: 'otra' } });
+  assert.equal(mala.status, 401);
+});
+
+test('panel: alta, edición con alerta de stock bajo y baja de producto', async () => {
+  const admin = await login('admin@test.mx');
+  const form = new FormData();
+  Object.entries({ nombre: 'Mouse inalámbrico', categoria_id: '1', precio: '499', existencias: '10', stock_minimo: '2', activo: 'true' })
+    .forEach(([k, v]) => form.append(k, v));
+  const alta = await fetch(`${base}/api/admin/productos`, { method: 'POST', headers: { Authorization: `Bearer ${admin}` }, body: form });
+  assert.equal(alta.status, 201);
+  const nuevo = await alta.json();
+  assert.equal(nuevo.slug, 'mouse-inalambrico');
+
+  const edit = new FormData();
+  Object.entries({ nombre: 'Mouse inalámbrico', categoria_id: '1', precio: '459', existencias: '2', stock_minimo: '2', activo: 'true' })
+    .forEach(([k, v]) => edit.append(k, v));
+  const cambio = await fetch(`${base}/api/admin/productos/${nuevo.id}`, { method: 'PUT', headers: { Authorization: `Bearer ${admin}` }, body: edit });
+  assert.equal(cambio.status, 200);
+  assert.equal((await cambio.json()).precio, 459);
+  const alerta = await pool.query('SELECT tipo FROM alerta_stock WHERE producto_id = $1', [nuevo.id]);
+  assert.deepEqual(alerta.rows.map((a) => a.tipo), ['bajo']);
+
+  assert.equal((await api('DELETE', `/api/admin/productos/${nuevo.id}`, { token: admin })).status, 204);
+  assert.equal((await api('GET', '/api/productos/mouse-inalambrico')).status, 404);
+});
+
+test('panel: cambiar estado y cancelar regresa piezas al inventario', async () => {
+  const vendedor = await login('vende@test.mx');
+  const pedido = (await pool.query(`SELECT id FROM pedido WHERE folio = 'MT-00005'`)).rows[0];
+  const envio = await api('PATCH', `/api/admin/pedidos/${pedido.id}/estado`, { token: vendedor, body: { estado: 'enviado' } });
+  assert.equal(envio.body.estado, 'enviado');
+
+  const cancel = await api('PATCH', `/api/admin/pedidos/${pedido.id}/estado`, { token: vendedor, body: { estado: 'cancelado' } });
+  assert.equal(cancel.status, 200);
+  assert.equal(await existencias('tarjeta-de-video-rtx-4060-8-gb'), 2);
+
+  const reactivar = await api('PATCH', `/api/admin/pedidos/${pedido.id}/estado`, { token: vendedor, body: { estado: 'pagado' } });
+  assert.equal(reactivar.status, 409);
+});
+
+test('asesor: recomienda productos en existencia sin llave de Gemini', async () => {
+  delete process.env.GEMINI_API_KEY;
+  const r = await api('POST', '/api/asesor', { body: { necesidad: 'estudio ingeniería civil y uso AutoCAD' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.fuente, 'reglas');
+  assert.ok(r.body.productos.some((p) => p.nombre.includes('CAD')));
+});

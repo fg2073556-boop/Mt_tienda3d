@@ -6,7 +6,7 @@ Esta guía es para quienes nunca han usado Git. Síguela en orden.
 
 1. Crea una cuenta en https://github.com y pásale tu nombre de usuario a Fernando para que te dé acceso.
 2. Acepta la invitación que te llega por correo.
-3. Instala Git: https://git-scm.com/downloads
+3. Instala Git (https://git-scm.com/downloads), Node.js 20 o más nuevo (https://nodejs.org) y Docker Desktop (https://www.docker.com/products/docker-desktop).
 4. Abre la terminal (en Windows: "Git Bash") y configura tu nombre:
 
 ```bash
@@ -28,6 +28,8 @@ git checkout main
 git pull                              # bajar lo último del equipo
 git checkout -b tunombre/tarea        # crear tu rama, ej. ana/modelo-gpu
 ```
+
+Si alguien agregó paquetes nuevos, vuelve a correr `npm install` dentro de `server` y de `client`. Para arrancar el proyecto sigue los pasos del README.
 
 Haz tu trabajo: agrega modelos, edita el CSV, escribe documentación, etc.
 

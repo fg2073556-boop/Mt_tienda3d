@@ -1,0 +1,23 @@
+# Base de datos PostgreSQL en Docker
+# Arrancar:  docker compose up -d
+# Detener:   docker compose down
+# Borrar datos y empezar de cero:  docker compose down -v
+services:
+  db:
+    image: postgres:16
+    container_name: mt_tienda_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - mt_tienda_data:/var/lib/postgresql/data
+      # Se ejecutan en orden solo la primera vez que se crea la base
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+
+volumes:
+  mt_tienda_data:
