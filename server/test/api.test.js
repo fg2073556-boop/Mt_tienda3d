@@ -222,3 +222,13 @@ test('IA: el asesor usa Gemini y si falla cae a reglas', async () => {
     assert.equal(r.body.fuente, 'reglas');
   } finally { g.restaurar(); delete process.env.GEMINI_API_KEY; }
 });
+
+test('seguimiento: el cliente consulta su pedido solo con folio y correo correctos', async () => {
+  const ok = await api('POST', '/api/pedidos/seguimiento', { body: { folio: 'mt-00004', correo: 'Laura@Ejemplo.com' } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.estado, 'pendiente');
+  assert.equal(ok.body.detalle.length, 2);
+  assert.equal(ok.body.id, undefined);
+  const otro = await api('POST', '/api/pedidos/seguimiento', { body: { folio: 'MT-00004', correo: 'otra@ejemplo.com' } });
+  assert.equal(otro.status, 404);
+});

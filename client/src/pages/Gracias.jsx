@@ -24,7 +24,10 @@ export default function Gracias() {
             <p className="small text-body-secondary mb-0 mt-2">Forma de pago: {METODOS_PAGO[pedido.metodo_pago]}</p>
           </div>
         )}
-        <Link to="/" className="btn btn-mt mt-3">Volver a la tienda</Link>
+        <div className="d-flex gap-2 mt-3 flex-wrap">
+          <Link to="/" className="btn btn-mt">Volver a la tienda</Link>
+          <Link to="/seguimiento" state={{ folio }} className="btn btn-outline-secondary">Consultar el estado después</Link>
+        </div>
       </div>
     </section>
   );

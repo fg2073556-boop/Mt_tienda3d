@@ -84,6 +84,14 @@ h1 { font-size: clamp(30px, 4.4vw, 50px); letter-spacing: -0.02em; line-height: 
 .contenido-panel { padding: clamp(20px, 3vw, 40px); }
 .kpi b { display: block; font-size: clamp(26px, 3vw, 34px); white-space: nowrap; }
 
+/* Seguimiento del pedido */
+.pasos { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 0; margin: 0; counter-reset: paso; }
+.pasos li { counter-increment: paso; text-align: center; font-size: 14px; color: #6b7d82; padding-top: 34px; position: relative; border-top: 4px solid #d8e2e0; }
+.pasos li::before { content: counter(paso); position: absolute; top: -16px; left: 50%; transform: translateX(-50%); width: 28px; height: 28px; border-radius: 50%; background: #d8e2e0; color: #53666c; display: grid; place-items: center; font-weight: 600; }
+.pasos li.hecho { color: #0c1b21; border-top-color: var(--mt-menta-osc); }
+.pasos li.hecho::before { background: var(--mt-menta-osc); color: #fff; }
+.pasos li[aria-current='step'] { font-weight: 600; }
+
 /* Herramientas de IA en el panel */
 .caja-ia { border: 1px dashed #9fd9bd; background: #f3fbf7; border-radius: 12px; padding: 14px 16px; }
 

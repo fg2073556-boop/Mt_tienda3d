@@ -6,6 +6,7 @@ import Producto from './pages/Producto.jsx';
 import Carrito from './pages/Carrito.jsx';
 import Pagar from './pages/Pagar.jsx';
 import Gracias from './pages/Gracias.jsx';
+import Seguimiento from './pages/Seguimiento.jsx';
 import Login from './pages/Login.jsx';
 import NoEncontrado from './pages/NoEncontrado.jsx';
 import PanelLayout from './pages/panel/PanelLayout.jsx';
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="carrito" element={<Carrito />} />
         <Route path="pagar" element={<Pagar />} />
         <Route path="pedido/:folio" element={<Gracias />} />
+        <Route path="seguimiento" element={<Seguimiento />} />
         <Route path="login" element={<Login />} />
         <Route path="*" element={<NoEncontrado />} />
       </Route>

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { transaction } from '../db.js';
+import { query, transaction } from '../db.js';
 import { HttpError, handle } from '../errors.js';
 import { METODOS_PAGO } from '../constants.js';
 import { fijarExistencias } from '../services/stock.js';
@@ -80,6 +80,37 @@ router.post('/pedidos', handle(async (req, res) => {
   });
 
   res.status(201).json(pedido);
+}));
+
+// Límite sencillo para que no se adivinen folios: 20 consultas por minuto por IP
+const consultas = new Map();
+function limitar(req, res, next) {
+  const ahora = Date.now();
+  const lista = (consultas.get(req.ip) || []).filter((t) => ahora - t < 60_000);
+  if (lista.length >= 20) return res.status(429).json({ error: 'Hiciste muchas consultas seguidas. Espera un minuto.' });
+  lista.push(ahora);
+  consultas.set(req.ip, lista);
+  next();
+}
+
+/**
+ * POST /api/pedidos/seguimiento  { folio, correo }
+ * El cliente consulta el estado de su pedido. Se pide el correo además del folio
+ * para que nadie vea pedidos ajenos (y va en el cuerpo, no en la URL).
+ */
+router.post('/pedidos/seguimiento', limitar, handle(async (req, res) => {
+  const folio = text(req.body.folio, 'folio', { max: 20 }).toUpperCase();
+  const correo = email(req.body.correo);
+  const { rows: [p] } = await query(
+    `SELECT id, folio, estado, total, metodo_pago, creado_en, actualizado_en
+     FROM pedido WHERE folio = $1 AND lower(cliente_correo) = $2`,
+    [folio, correo],
+  );
+  if (!p) throw new HttpError(404, 'No encontramos un pedido con ese folio y correo. Revisa que estén bien escritos.');
+  const { rows: detalle } = await query(
+    'SELECT producto_nombre, cantidad, subtotal FROM pedido_detalle WHERE pedido_id = $1 ORDER BY id', [p.id]);
+  const { id, ...publico } = p;
+  res.json({ ...publico, detalle });
 }));
 
 export default router;

@@ -12,6 +12,7 @@ export default function TiendaLayout() {
       <header className="barra">
         <Link to="/" className="logo">M<b>&amp;</b>T</Link>
         <NavLink to="/" end className="btn btn-nav">Tienda</NavLink>
+        <NavLink to="/seguimiento" className="btn btn-nav">Mi pedido</NavLink>
         {usuario && <NavLink to="/panel" className="btn btn-nav">Panel</NavLink>}
         <NavLink to="/carrito" className="btn btn-mt">
           Carrito <span className="badge text-bg-dark ms-1">{cuenta}</span>
