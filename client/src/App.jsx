@@ -11,6 +11,7 @@ import Seguimiento from './pages/Seguimiento.jsx';
 import Login from './pages/Login.jsx';
 import NoEncontrado from './pages/NoEncontrado.jsx';
 const Galeria3D = lazy(() => import('./pages/Galeria3D.jsx'));
+const Envios = lazy(() => import('./pages/Envios.jsx'));
 const PanelLayout = lazy(() => import('./pages/panel/PanelLayout.jsx'));
 const Resumen = lazy(() => import('./pages/panel/Resumen.jsx'));
 const Productos = lazy(() => import('./pages/panel/Productos.jsx'));
@@ -18,6 +19,7 @@ const ProductoForm = lazy(() => import('./pages/panel/ProductoForm.jsx'));
 const Pedidos = lazy(() => import('./pages/panel/Pedidos.jsx'));
 const PedidoDetalle = lazy(() => import('./pages/panel/PedidoDetalle.jsx'));
 const Reposicion = lazy(() => import('./pages/panel/Reposicion.jsx'));
+const PanelEnvios = lazy(() => import('./pages/panel/Envios.jsx'));
 
 export default function App() {
   return (
@@ -30,6 +32,7 @@ export default function App() {
         <Route path="pagar" element={<Pagar />} />
         <Route path="pedido/:folio" element={<Gracias />} />
         <Route path="seguimiento" element={<Seguimiento />} />
+        <Route path="envios" element={<Suspense fallback={<p className="contenedor banda text-body-secondary">Cargando…</p>}><Envios /></Suspense>} />
         <Route path="login" element={<Login />} />
         <Route path="galeria-3d" element={<Suspense fallback={<p className="contenedor banda text-body-secondary">Cargando galería…</p>}><Galeria3D /></Suspense>} />
         <Route path="*" element={<NoEncontrado />} />
@@ -44,6 +47,7 @@ export default function App() {
         <Route path="pedidos" element={<Pedidos />} />
         <Route path="pedidos/:id" element={<PedidoDetalle />} />
         <Route path="reposicion" element={<Reposicion />} />
+        <Route path="envios" element={<RutaProtegida roles={['administrador']}><PanelEnvios /></RutaProtegida>} />
       </Route>
     </Routes>
   );

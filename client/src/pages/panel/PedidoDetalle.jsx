@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAviso } from '../../components/Aviso.jsx';
+import DetalleEnvio, { envioDePedido } from '../../components/DetalleEnvio.jsx';
 import { api } from '../../lib/api.js';
 import { dinero, ESTADOS, fecha, METODOS_PAGO } from '../../lib/formato.js';
 
@@ -57,6 +58,7 @@ export default function PedidoDetalle() {
                 </li>
               ))}
             </ul>
+            <div className="my-2"><DetalleEnvio envio={envioDePedido(pedido)} /></div>
             <div className="d-flex justify-content-between total"><span>Total</span><span>{dinero(pedido.total)}</span></div>
           </div>
         </div>

@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import DetalleEnvio, { envioDePedido } from '../components/DetalleEnvio.jsx';
 import InstruccionesPago from '../components/InstruccionesPago.jsx';
+import MapaZonas from '../components/MapaZonas.jsx';
 import { api } from '../lib/api.js';
 import { dinero, ESTADOS, fecha, METODOS_PAGO } from '../lib/formato.js';
 
@@ -14,6 +16,11 @@ export default function Seguimiento() {
   const [pedido, setPedido] = useState(null);
   const [error, setError] = useState('');
   const [buscando, setBuscando] = useState(false);
+  const [zonas, setZonas] = useState(null);
+  // El mapa de la ruta solo se pide cuando el pedido tiene envío
+  useEffect(() => {
+    if (pedido?.envio_municipio && !zonas) api('/envios/zonas').then(setZonas).catch(() => {});
+  }, [pedido, zonas]);
 
   const buscar = async (e) => {
     e.preventDefault();
@@ -70,6 +77,15 @@ export default function Seguimiento() {
                 </li>
               ))}
             </ul>
+            <DetalleEnvio envio={envioDePedido(pedido)} />
+            {pedido.envio_municipio && zonas && pedido.estado !== 'cancelado' && (
+              <div className="seguimiento-mapa">
+                <MapaZonas datos={zonas} destino={zonas.municipios.find((m) => m.nombre === pedido.envio_municipio)?.cve_mun} alto={340} />
+                <p className="small text-body-secondary mb-0">
+                  {pedido.estado === 'enviado' ? 'Tu paquete va en camino desde Tepeaca.' : pedido.estado === 'entregado' ? 'Tu paquete ya llegó.' : 'Tu paquete saldrá de nuestra tienda en Tepeaca.'}
+                </p>
+              </div>
+            )}
             <div className="d-flex justify-content-between total"><span>Total</span><span>{dinero(pedido.total)}</span></div>
             {pedido.estado !== 'cancelado' && pedido.pago_datos && (
               <InstruccionesPago metodo={pedido.metodo_pago} estado={pedido.estado} total={pedido.total} pago={{ estado: pedido.pago_estado, datos: pedido.pago_datos }} />

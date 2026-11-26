@@ -31,7 +31,9 @@ export function CartProvider({ children }) {
       setItems((prev) => {
         const sin = prev.filter((i) => i.id !== producto.id);
         const { id, nombre, slug, precio, existencias } = producto;
-        return [...sin, { id, nombre, slug, precio, existencias, cantidad: actual + cantidad }];
+        // Las licencias de software llegan por correo: no pagan envío
+        const digital = producto.categoria?.slug === 'software';
+        return [...sin, { id, nombre, slug, precio, existencias, digital, cantidad: actual + cantidad }];
       });
       return null;
     };
@@ -48,6 +50,7 @@ export function CartProvider({ children }) {
       vaciar,
       cuenta: items.reduce((s, i) => s + i.cantidad, 0),
       total: items.reduce((s, i) => s + i.precio * i.cantidad, 0),
+      conEnvio: items.some((i) => !i.digital),
     };
   }, [items]);
 

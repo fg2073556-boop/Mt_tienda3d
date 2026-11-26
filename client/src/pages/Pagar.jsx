@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext.jsx';
 import { api } from '../lib/api.js';
+import ResultadoEnvio from '../components/ResultadoEnvio.jsx';
+import { useCotizacion } from '../lib/envios.js';
 import { dinero } from '../lib/formato.js';
 import { formatearNumero, marcaDe, prepararOpenpay, soloDigitos, tokenizar } from '../lib/openpay.js';
 
-const VACIO = { cliente_nombre: '', cliente_correo: '', cliente_telefono: '', direccion: '' };
+const VACIO = { cliente_nombre: '', cliente_correo: '', cliente_telefono: '', direccion: '', envio_cp: '', envio_colonia: '' };
 const TARJETA_VACIA = { titular: '', numero: '', vence: '', cvv: '' };
 
 const Trazo = ({ children }) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
@@ -25,7 +27,7 @@ function opciones(openpay) {
 }
 
 export default function Pagar() {
-  const { items, total, vaciar, cambiar } = useCart();
+  const { items, total: subtotal, vaciar, cambiar, conEnvio } = useCart();
   const [datos, setDatos] = useState(VACIO);
   const [config, setConfig] = useState(null); // { activo, merchantId, publicKey, sandbox }
   const [metodo, setMetodo] = useState('');
@@ -33,6 +35,16 @@ export default function Pagar() {
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState('');
   const navigate = useNavigate();
+  const cotizacion = useCotizacion(conEnvio ? datos.envio_cp : '');
+  const envio = conEnvio && cotizacion.datos?.cubre ? cotizacion.datos.zona.costo : 0;
+  const total = subtotal + envio;
+  const sinCobertura = conEnvio && cotizacion.datos && !cotizacion.datos.cubre;
+
+  // Si cambia el CP, la colonia anterior ya no sirve; si solo hay una, se elige sola
+  useEffect(() => {
+    const colonias = cotizacion.datos?.colonias || [];
+    setDatos((d) => ({ ...d, envio_colonia: colonias.length === 1 ? colonias[0].nombre : colonias.some((c) => c.nombre === d.envio_colonia) ? d.envio_colonia : '' }));
+  }, [cotizacion.datos]);
 
   useEffect(() => {
     api('/pagos/config')
@@ -65,7 +77,12 @@ export default function Pagar() {
     e.preventDefault();
     if (datos.cliente_nombre.trim().length < 3) return setError('Escribe el nombre de quien recibe.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(datos.cliente_correo)) return setError('Escribe un correo válido.');
-    if (!datos.direccion.trim()) return setError('Escribe la dirección de entrega.');
+    if (conEnvio) {
+      if (!cotizacion.datos) return setError('Escribe el código postal de entrega.');
+      if (!cotizacion.datos.cubre) return setError(cotizacion.datos.mensaje);
+      if (!datos.envio_colonia) return setError('Elige tu colonia.');
+      if (!datos.direccion.trim()) return setError('Escribe la calle y el número.');
+    }
 
     try {
       let extra = {};
@@ -103,8 +120,36 @@ export default function Pagar() {
                 <div className="col-12"><label className="form-label w-100">Nombre de quien recibe<input className="form-control" autoComplete="name" {...campo('cliente_nombre')} /></label></div>
                 <div className="col-sm-6"><label className="form-label w-100">Correo<input type="email" className="form-control" autoComplete="email" {...campo('cliente_correo')} /></label></div>
                 <div className="col-sm-6"><label className="form-label w-100">Teléfono<input type="tel" className="form-control" autoComplete="tel" {...campo('cliente_telefono')} /></label></div>
-                <div className="col-12"><label className="form-label w-100">Dirección de entrega<textarea className="form-control" rows={2} autoComplete="street-address" {...campo('direccion')} /></label></div>
               </div>
+
+              <h2 className="h5 mb-0 mt-2">Envío</h2>
+              {!conEnvio ? (
+                <p className="envio-digital mb-0">Tu compra es digital: las licencias llegan a tu correo y no pagan envío.</p>
+              ) : (
+                <div className="row g-3">
+                  <div className="col-sm-5">
+                    <label className="form-label w-100">Código postal
+                      <input className="form-control" inputMode="numeric" autoComplete="postal-code" maxLength={5} placeholder="75200"
+                        value={datos.envio_cp} onChange={(e) => { setDatos({ ...datos, envio_cp: e.target.value.replace(/\D/g, '').slice(0, 5) }); setError(''); }} />
+                    </label>
+                  </div>
+                  <div className="col-sm-7">
+                    <label className="form-label w-100">Colonia
+                      <select className="form-select" disabled={!cotizacion.datos?.cubre} {...campo('envio_colonia')}>
+                        <option value="">{cotizacion.datos?.cubre ? 'Elige tu colonia' : 'Primero escribe tu código postal'}</option>
+                        {cotizacion.datos?.cubre && cotizacion.datos.colonias.map((c) => <option key={c.nombre} value={c.nombre}>{c.nombre} ({c.tipo})</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  {cotizacion.cargando && <div className="col-12 small text-body-secondary">Revisando si llegamos…</div>}
+                  {cotizacion.datos && <div className="col-12"><ResultadoEnvio datos={cotizacion.datos} /></div>}
+                  <div className="col-12">
+                    <label className="form-label w-100">Calle, número y referencias
+                      <textarea className="form-control" rows={2} autoComplete="street-address" placeholder="Av. Hidalgo 123, entre 2 y 4 Norte, portón verde" {...campo('direccion')} />
+                    </label>
+                  </div>
+                </div>
+              )}
 
               <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
                 <h2 className="h5 mb-0">Forma de pago</h2>
@@ -163,7 +208,7 @@ export default function Pagar() {
                 <p className="small text-body-secondary mb-0">Pago simulado: la tienda todavía no tiene llaves de Openpay, así que no se cobra nada.</p>
               )}
               {error && <div className="alert alert-danger mb-0" role="alert">{error}</div>}
-              <button className="btn btn-mt btn-lg" disabled={Boolean(enviando) || !config}>
+              <button className="btn btn-mt btn-lg" disabled={Boolean(enviando) || !config || sinCobertura}>
                 {enviando ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />{enviando}</>
                   : conTarjeta ? `Pagar ${dinero(total)}` : metodo === 'tarjeta_prueba' ? `Confirmar compra por ${dinero(total)}` : `Generar referencia de pago por ${dinero(total)}`}
               </button>
@@ -179,6 +224,11 @@ export default function Pagar() {
                   </li>
                 ))}
               </ul>
+              <div className="d-flex justify-content-between py-1"><span>Productos</span><span>{dinero(subtotal)}</span></div>
+              <div className="d-flex justify-content-between py-1 border-bottom mb-1">
+                <span>Envío{cotizacion.datos?.cubre && conEnvio ? ` · ${cotizacion.datos.zona.nombre}` : ''}</span>
+                <span>{!conEnvio ? 'Digital' : cotizacion.datos?.cubre ? (envio === 0 ? 'Gratis' : dinero(envio)) : '—'}</span>
+              </div>
               <div className="d-flex justify-content-between total"><span>Total</span><span>{dinero(total)}</span></div>
             </div>
           </div>

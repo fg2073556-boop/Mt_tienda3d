@@ -83,11 +83,11 @@ export async function mapaDeZonas(db) {
   const [zonas, municipios] = await Promise.all([
     db.query(`SELECT z.*, (SELECT COUNT(*)::int FROM municipio_envio m WHERE m.zona_id = z.id) AS municipios
               FROM zona_envio z ORDER BY z.id`),
-    db.query('SELECT cve_mun, nombre, distancia_km, zona_id FROM municipio_envio ORDER BY nombre'),
+    db.query('SELECT cve_mun, nombre, lat, lon, distancia_km, zona_id FROM municipio_envio ORDER BY nombre'),
   ]);
   return {
     tienda: TIENDA,
     zonas: zonas.rows.map((z) => ({ ...z, costo: Number(z.costo) })),
-    municipios: municipios.rows.map((m) => ({ ...m, distancia_km: Number(m.distancia_km) })),
+    municipios: municipios.rows.map((m) => ({ ...m, lat: Number(m.lat), lon: Number(m.lon), distancia_km: Number(m.distancia_km) })),
   };
 }

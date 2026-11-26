@@ -315,3 +315,43 @@ h1 { font-size: clamp(30px, 4.4vw, 50px); letter-spacing: -0.02em; line-height: 
 .pago-dato-grande { font-size: 19px; letter-spacing: .03em; }
 .pago-barras { max-width: 100%; height: 60px; object-fit: contain; background: #fff; padding: 6px; border-radius: 8px; justify-self: start; }
 .pago-panel { margin-top: 10px; border: 1px solid #d8e2e0; border-radius: 12px; padding: 12px; display: grid; gap: 4px; }
+
+/* Envíos */
+.mapa-zonas { position: relative; display: flex; justify-content: center; }
+.mapa-zonas svg { width: 100%; height: auto; max-height: inherit; }
+.mapa-zonas.cargando { display: grid; place-items: center; color: var(--bs-secondary-color); background: var(--mt-suave); border-radius: 12px; }
+.mapa-mun { stroke: #fff; stroke-width: .7; transition: opacity .15s; }
+.mapa-mun:hover { opacity: .78; }
+.mapa-mun.elegible { cursor: pointer; }
+.mapa-mun.activo { stroke: #0c1b21; stroke-width: 2.2; }
+.mapa-ruta path { fill: none; stroke: #0c1b21; stroke-width: 2.4; stroke-dasharray: 6 5; animation: ruta 1s linear infinite; }
+.mapa-destino { fill: #fff; stroke: #0c1b21; stroke-width: 3; }
+.mapa-tienda circle { fill: #0c1b21; stroke: #fff; stroke-width: 3; }
+.mapa-tienda text { font: 700 13px 'Space Grotesk', Inter, sans-serif; fill: #0c1b21; paint-order: stroke; stroke: #fff; stroke-width: 3px; }
+@keyframes ruta { to { stroke-dashoffset: -22; } }
+@media (prefers-reduced-motion: reduce) { .mapa-ruta path { animation: none; } }
+.mapa-info { position: absolute; pointer-events: none; transform: translate(12px, -110%); background: #0c1b21; color: #e4efec; border-radius: 10px; padding: 8px 10px; font-size: 12px; display: grid; gap: 1px; white-space: nowrap; z-index: 2; }
+.mapa-info b { color: #fff; font-size: 13px; }
+.leyenda-zonas { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.leyenda-zonas li { display: flex; align-items: center; gap: 10px; }
+.leyenda-zonas small { display: block; color: #53666c; font-size: 12px; }
+.leyenda-zonas li > span:nth-child(2) { flex: 1; min-width: 0; }
+.muestra { display: inline-block; width: 16px; height: 16px; border-radius: 5px; flex: none; vertical-align: -3px; }
+.envios-cabeza { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+.envios-cp { display: grid; gap: 6px; font-weight: 600; min-width: min(320px, 100%); }
+.envios-rejilla { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; margin-top: 18px; align-items: start; }
+.envios-listas { display: grid; gap: 14px; }
+.envio-resultado { border-radius: 14px; padding: 14px 16px; display: grid; gap: 10px; }
+.envio-resultado.si { border: 1.5px solid var(--zona, var(--mt-menta-osc)); background: #f6fbf8; }
+.envio-resultado.no { border: 1px solid #f5c2c9; background: #fdecee; color: #8f1d2c; gap: 4px; }
+.envio-zona { font-size: 12px; font-weight: 700; color: #fff; background: var(--zona); border-radius: 999px; padding: 3px 10px; }
+.envio-cifras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.envio-cifras span { display: grid; gap: 1px; }
+.envio-cifras small { color: #53666c; font-size: 12px; }
+.envio-digital { background: var(--mt-suave); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.envio-pedido { display: flex; align-items: center; gap: 12px; border: 1px solid #d8e2e0; border-radius: 12px; padding: 10px 12px; }
+.envio-pedido-icono { width: 36px; height: 36px; flex: none; border-radius: 10px; display: grid; place-items: center; background: var(--mt-suave); color: var(--mt-menta-osc); }
+.envio-pedido-icono svg { width: 20px; height: 20px; }
+.seguimiento-mapa { border: 1px solid #d8e2e0; border-radius: 14px; padding: 12px; display: grid; gap: 6px; }
+@media (max-width: 1000px) { .envios-rejilla { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .envio-cifras { grid-template-columns: 1fr 1fr; } }

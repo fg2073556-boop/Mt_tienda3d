@@ -10,6 +10,7 @@ const MENU = [
   { to: '/panel/productos/nuevo', texto: 'Dar de alta', roles: ['administrador'] },
   { to: '/panel/pedidos', texto: 'Pedidos', roles: ['administrador', 'vendedor'] },
   { to: '/panel/reposicion', texto: 'Reposición', roles: ['administrador', 'vendedor'] },
+  { to: '/panel/envios', texto: 'Envíos', roles: ['administrador'] },
 ];
 
 export default function PanelLayout() {
