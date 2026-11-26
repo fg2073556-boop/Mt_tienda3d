@@ -9,7 +9,9 @@ CREATE TABLE usuario (
     nombre         VARCHAR(120) NOT NULL,
     correo         VARCHAR(150) NOT NULL UNIQUE,
     password_hash  VARCHAR(100) NOT NULL,
-    rol            VARCHAR(20)  NOT NULL CHECK (rol IN ('administrador', 'vendedor')),
+    -- administrador y vendedor entran al panel; cliente compra en la tienda
+    rol            VARCHAR(20)  NOT NULL CONSTRAINT usuario_rol_check CHECK (rol IN ('administrador', 'vendedor', 'cliente')),
+    telefono       VARCHAR(20),
     activo         BOOLEAN      NOT NULL DEFAULT TRUE,
     creado_en      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -46,6 +48,7 @@ CREATE TABLE producto (
 CREATE TABLE pedido (
     id                SERIAL PRIMARY KEY,
     folio             VARCHAR(20)   UNIQUE,
+    usuario_id        INT           REFERENCES usuario(id) ON DELETE SET NULL,   -- cliente que compró
     cliente_nombre    VARCHAR(120)  NOT NULL,
     cliente_correo    VARCHAR(150)  NOT NULL,
     cliente_telefono  VARCHAR(20),
@@ -111,6 +114,7 @@ CREATE INDEX idx_producto_categoria ON producto(categoria_id);
 CREATE INDEX idx_producto_pieza     ON producto(pieza_3d) WHERE eliminado_en IS NULL;
 CREATE INDEX idx_pedido_estado      ON pedido(estado);
 CREATE INDEX idx_pedido_creado      ON pedido(creado_en DESC);
+CREATE INDEX idx_pedido_usuario     ON pedido(usuario_id, creado_en DESC);
 CREATE UNIQUE INDEX idx_pedido_pago_id ON pedido(pago_id) WHERE pago_id IS NOT NULL;
 CREATE INDEX idx_pedido_pago_pendiente ON pedido(creado_en) WHERE pago_id IS NOT NULL AND estado = 'pendiente';
 CREATE INDEX idx_detalle_pedido     ON pedido_detalle(pedido_id);

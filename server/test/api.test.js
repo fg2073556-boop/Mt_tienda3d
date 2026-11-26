@@ -30,6 +30,7 @@ const { revisarPendientes } = await import('../src/services/pagos.js');
 
 let server;
 let base;
+let cliente; // token de una cuenta de cliente: para comprar hay que tener sesión
 const api = async (method, ruta, { body, token } = {}) => {
   const res = await fetch(base + ruta, {
     method,
@@ -52,11 +53,13 @@ before(async () => {
   await migrarBase(pool);
   const hash = await bcrypt.hash('clave-de-prueba', 4);
   await pool.query(
-    `INSERT INTO usuario (nombre, correo, password_hash, rol) VALUES ('Admin', 'admin@test.mx', $1, 'administrador'), ('Vende', 'vende@test.mx', $1, 'vendedor')`,
+    `INSERT INTO usuario (nombre, correo, password_hash, rol) VALUES ('Admin', 'admin@test.mx', $1, 'administrador'), ('Vende', 'vende@test.mx', $1, 'vendedor'),
+       ('Clienta', 'cliente@test.mx', $1, 'cliente')`,
     [hash],
   );
   server = crearApp().listen(0);
   base = `http://127.0.0.1:${server.address().port}`;
+  cliente = await login('cliente@test.mx');
 });
 
 after(async () => {
@@ -94,7 +97,7 @@ test('catálogo: lista productos activos, filtra y da piezas 3D', async () => {
 
 test('pago: no vende más de lo que hay y no guarda nada', async () => {
   const gpu = await idDe('tarjeta-de-video-rtx-4060-8-gb');
-  const r = await api('POST', '/api/pedidos', { body: {
+  const r = await api('POST', '/api/pedidos', { token: cliente, body: {
     cliente_nombre: 'Cliente', cliente_correo: 'c@ejemplo.com', direccion: 'Tepeaca', metodo_pago: 'tienda',
     items: [{ producto_id: gpu, cantidad: 3 }],
   } });
@@ -105,7 +108,7 @@ test('pago: no vende más de lo que hay y no guarda nada', async () => {
 test('pago: crea pedido, descuenta stock y genera alerta de agotado', async () => {
   const gpu = await idDe('tarjeta-de-video-rtx-4060-8-gb');
   const ram = await idDe('memoria-32-gb-ddr5-rgb-2x16');
-  const r = await api('POST', '/api/pedidos', { body: {
+  const r = await api('POST', '/api/pedidos', { token: cliente, body: {
     cliente_nombre: 'Cliente de prueba', cliente_correo: 'cliente@ejemplo.com', direccion: 'Av. Hidalgo 123',
     envio_cp: '75200', envio_colonia: 'Tepeaca Centro',
     metodo_pago: 'tarjeta_prueba', items: [{ producto_id: gpu, cantidad: 2 }, { producto_id: ram, cantidad: 1 }],
@@ -508,6 +511,7 @@ function simularOpenpay(responder) {
   };
 }
 const compra = async (slug, metodo, extra = {}) => api('POST', '/api/pedidos', {
+  token: cliente,
   body: { cliente_nombre: 'Ana María López Pérez', cliente_correo: 'ana@ejemplo.com', cliente_telefono: '222 123 4567', direccion: 'Calle 5, Tepeaca', metodo_pago: metodo, items: [{ producto_id: await idDe(slug), cantidad: 1 }], ...extra },
 });
 
@@ -660,15 +664,15 @@ test('envíos: la compra cobra el envío y no deja comprar fuera de cobertura', 
   const base = { cliente_nombre: 'Luis Pérez', cliente_correo: 'luis@ejemplo.com', direccion: 'Calle 2 Sur 10', metodo_pago: 'tienda', items: [{ producto_id: id, cantidad: 1 }] };
   const antes = await existencias('kit-3-ventiladores-rgb-120-mm');
 
-  const fuera = await api('POST', '/api/pedidos', { body: { ...base, envio_cp: '91000', envio_colonia: 'Centro' } });
+  const fuera = await api('POST', '/api/pedidos', { token: cliente, body: { ...base, envio_cp: '91000', envio_colonia: 'Centro' } });
   assert.equal(fuera.status, 422);
   assert.match(fuera.body.error, /Puebla/);
-  assert.equal((await api('POST', '/api/pedidos', { body: { ...base, envio_cp: '75200', envio_colonia: 'Colonia inventada' } })).status, 422);
-  assert.equal((await api('POST', '/api/pedidos', { body: { ...base, envio_cp: '75200', envio_colonia: 'Tepeaca Centro', direccion: '' } })).status, 422);
+  assert.equal((await api('POST', '/api/pedidos', { token: cliente, body: { ...base, envio_cp: '75200', envio_colonia: 'Colonia inventada' } })).status, 422);
+  assert.equal((await api('POST', '/api/pedidos', { token: cliente, body: { ...base, envio_cp: '75200', envio_colonia: 'Tepeaca Centro', direccion: '' } })).status, 422);
   assert.equal(await existencias('kit-3-ventiladores-rgb-120-mm'), antes);
 
   const cdmx = (await api('GET', '/api/envios/cotizar?cp=72000')).body; // ciudad de Puebla
-  const ok = await api('POST', '/api/pedidos', { body: { ...base, envio_cp: '72000', envio_colonia: cdmx.colonias[0].nombre } });
+  const ok = await api('POST', '/api/pedidos', { token: cliente, body: { ...base, envio_cp: '72000', envio_colonia: cdmx.colonias[0].nombre } });
   assert.equal(ok.status, 201);
   assert.equal(ok.body.envio.municipio, 'Puebla');
   assert.equal(ok.body.total, 799 + cdmx.zona.costo);
@@ -692,4 +696,45 @@ test('envíos: el administrador cambia costos y cobertura; el vendedor no', asyn
   assert.equal((await api('GET', '/api/envios/cotizar?cp=75200')).body.motivo, 'sin_cobertura');
   await api('PATCH', '/api/admin/envios/municipios/164', { token: admin, body: { zona_id: 1 } });
   assert.equal((await api('GET', '/api/envios/cotizar?cp=75200')).body.cubre, true);
+});
+
+/* ---------- Cuentas: ver sin sesión, comprar con cuenta ---------- */
+test('cuentas: cualquiera ve el catálogo, pero para comprar hay que tener sesión', async () => {
+  assert.equal((await api('GET', '/api/productos')).status, 200);
+  const sin = await api('POST', '/api/pedidos', { body: { cliente_nombre: 'Sin cuenta', cliente_correo: 'x@ejemplo.com', metodo_pago: 'tienda', items: [{ producto_id: await idDe('suite-de-oficina-1-ano'), cantidad: 1 }] } });
+  assert.equal(sin.status, 401);
+  assert.match(sin.body.error, /Inicia sesión/);
+});
+
+test('cuentas: el cliente se registra, compra, ve solo sus pedidos y no entra al panel', async () => {
+  const nueva = await api('POST', '/api/auth/registro', { body: { nombre: 'Rosa Méndez', correo: 'Rosa@Ejemplo.com', password: 'clave-segura-1', telefono: '222 555 1234' } });
+  assert.equal(nueva.status, 201);
+  assert.equal(nueva.body.usuario.rol, 'cliente');
+  assert.equal(nueva.body.usuario.correo, 'rosa@ejemplo.com');
+  const rosa = nueva.body.token;
+
+  assert.equal((await api('POST', '/api/auth/registro', { body: { nombre: 'Otra Rosa', correo: 'rosa@ejemplo.com', password: 'otra-clave-2' } })).status, 409);
+  assert.equal((await api('POST', '/api/auth/registro', { body: { nombre: 'Corta', correo: 'corta@ejemplo.com', password: '123' } })).status, 422);
+  // Nadie puede registrarse como administrador
+  const truco = await api('POST', '/api/auth/registro', { body: { nombre: 'Hacker', correo: 'h@ejemplo.com', password: 'clave-larga-3', rol: 'administrador' } });
+  assert.equal(truco.body.usuario.rol, 'cliente');
+
+  // Mismo inicio de sesión para todos
+  const entra = await api('POST', '/api/auth/login', { body: { correo: 'rosa@ejemplo.com', password: 'clave-segura-1' } });
+  assert.equal(entra.status, 200);
+  assert.equal(entra.body.usuario.rol, 'cliente');
+  assert.equal((await api('GET', '/api/auth/yo', { token: rosa })).body.telefono, '222 555 1234');
+
+  assert.equal((await api('GET', '/api/admin/resumen', { token: rosa })).status, 403);
+  assert.equal((await api('GET', '/api/admin/reposicion', { token: rosa })).status, 403);
+
+  const compra = await api('POST', '/api/pedidos', { token: rosa, body: { cliente_nombre: 'Rosa Méndez', cliente_correo: 'rosa@ejemplo.com', metodo_pago: 'tienda', items: [{ producto_id: await idDe('suite-de-oficina-1-ano'), cantidad: 1 }] } });
+  assert.equal(compra.status, 201);
+  const mios = await api('GET', '/api/mis-pedidos', { token: rosa });
+  assert.equal(mios.status, 200);
+  assert.deepEqual(mios.body.map((p) => p.folio), [compra.body.folio]);
+  assert.equal(mios.body[0].detalle[0].producto_nombre, 'Suite de oficina (1 año)');
+  assert.equal(mios.body[0].id, undefined);
+  assert.ok(!(await api('GET', '/api/mis-pedidos', { token: cliente })).body.some((p) => p.folio === compra.body.folio), 'no ve pedidos de otros');
+  assert.equal((await api('GET', '/api/mis-pedidos')).status, 401);
 });

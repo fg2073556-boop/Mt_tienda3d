@@ -6,6 +6,7 @@ import { crearCargo, ErrorPago, openpayListo } from '../services/openpay.js';
 import { cotizar, esDigital } from '../services/envios.js';
 import { fijarExistencias } from '../services/stock.js';
 import { email, int, oneOf, text } from '../validate.js';
+import { requiereSesion } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -27,9 +28,9 @@ function limitarTarjeta(req, res, next) {
  *   token_id?, device_session_id? }   ← los dos últimos solo para tarjeta con Openpay
  *
  * Es todo o nada: si algún producto ya no alcanza, o si Openpay rechaza la tarjeta,
- * no se guarda el pedido ni se descuenta nada.
+ * no se guarda el pedido ni se descuenta nada. Para comprar hay que tener cuenta (sesión).
  */
-router.post('/pedidos', limitarTarjeta, handle(async (req, res) => {
+router.post('/pedidos', requiereSesion, limitarTarjeta, handle(async (req, res) => {
   const b = req.body;
   const datos = {
     cliente_nombre: text(b.cliente_nombre, 'nombre', { min: 3, max: 120 }),
@@ -88,9 +89,9 @@ router.post('/pedidos', limitarTarjeta, handle(async (req, res) => {
     // Simulado: la tarjeta de prueba queda pagada. Con Openpay: queda pagado cuando Openpay lo confirma
     let estado = datos.metodo_pago === 'tarjeta_prueba' ? 'pagado' : 'pendiente';
     const { rows: [nuevo] } = await client.query(
-      `INSERT INTO pedido (cliente_nombre, cliente_correo, cliente_telefono, direccion, metodo_pago, estado)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [datos.cliente_nombre, datos.cliente_correo, datos.cliente_telefono, datos.direccion || 'Entrega digital por correo', datos.metodo_pago, estado],
+      `INSERT INTO pedido (cliente_nombre, cliente_correo, cliente_telefono, direccion, metodo_pago, estado, usuario_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [datos.cliente_nombre, datos.cliente_correo, datos.cliente_telefono, datos.direccion || 'Entrega digital por correo', datos.metodo_pago, estado, req.usuario.id],
     );
 
     let total = 0;
@@ -150,6 +151,22 @@ router.post('/pedidos', limitarTarjeta, handle(async (req, res) => {
   });
 
   res.status(201).json(pedido);
+}));
+
+// GET /api/mis-pedidos → los pedidos de la cuenta con sesión, del más nuevo al más viejo
+router.get('/mis-pedidos', requiereSesion, handle(async (req, res) => {
+  const { rows: pedidos } = await query(
+    `SELECT id, folio, estado, total, metodo_pago, creado_en, actualizado_en, pago_estado, pago_datos,
+            envio_cp, envio_colonia, envio_municipio, envio_zona, envio_km, envio_dias, envio_costo
+     FROM pedido WHERE usuario_id = $1 ORDER BY creado_en DESC LIMIT 50`,
+    [req.usuario.id],
+  );
+  const { rows: detalle } = await query(
+    `SELECT pedido_id, producto_nombre, cantidad, subtotal FROM pedido_detalle
+     WHERE pedido_id = ANY($1) ORDER BY id`,
+    [pedidos.map((p) => p.id)],
+  );
+  res.json(pedidos.map(({ id, ...p }) => ({ ...p, detalle: detalle.filter((d) => d.pedido_id === id).map(({ pedido_id, ...d }) => d) })));
 }));
 
 // Límite sencillo para que no se adivinen folios: 20 consultas por minuto por IP
