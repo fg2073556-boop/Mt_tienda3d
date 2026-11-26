@@ -86,6 +86,7 @@ CREATE TABLE ajuste_reposicion (
     aviso_automatico    BOOLEAN      NOT NULL DEFAULT TRUE,
     proveedor_nombre    VARCHAR(120),
     proveedor_whatsapp  VARCHAR(20),              -- solo dígitos, con lada de país (52...)
+    whatsapp_automatico BOOLEAN      NOT NULL DEFAULT TRUE,
     actualizado_en      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 INSERT INTO ajuste_reposicion (id) VALUES (1);

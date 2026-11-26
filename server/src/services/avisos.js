@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { enviarWhatsapp, whatsappListo } from './whatsapp.js';
 
 /**
  * Avisos de reposición.
@@ -34,7 +35,7 @@ export const porReponer = async (db) => (await inventario(db)).filter((p) => p.e
 
 export async function leerAjuste(db) {
   const { rows } = await db.query('SELECT * FROM ajuste_reposicion WHERE id = 1');
-  return rows[0] ?? { correo_destino: null, aviso_automatico: true, proveedor_nombre: null, proveedor_whatsapp: null };
+  return rows[0] ?? { correo_destino: null, aviso_automatico: true, proveedor_nombre: null, proveedor_whatsapp: null, whatsapp_automatico: true };
 }
 
 /* ---------- Correo ---------- */
@@ -153,26 +154,35 @@ export async function enviarCorreo({ para, asunto, texto, html }) {
 
 /* ---------- Aviso automático ---------- */
 
-export const estadoAvisos = { ultimoEnvio: null, ultimoError: null };
+export const estadoAvisos = { ultimoEnvio: null, ultimoError: null, ultimoWhatsapp: null, errorWhatsapp: null };
 let revisando = false;
 
+const anotarError = (clave, error) => {
+  if (estadoAvisos[clave] !== error.message) console.warn(`Aviso de reposición (${clave === 'ultimoError' ? 'correo' : 'WhatsApp'}):`, error.message);
+  estadoAvisos[clave] = error.message;
+};
+
 /**
- * Junta las alertas nuevas y manda un solo correo. Las alertas de hace más de
- * 24 horas que nunca se mandaron se marcan sin enviar (ya no son noticia).
- * @returns {Promise<{enviado:boolean, alertas?:number, motivo?:string}>}
+ * Junta las alertas nuevas y avisa una sola vez por cada tanda:
+ *  - correo con todo lo que falta (si está configurado)
+ *  - WhatsApp al proveedor pidiendo lo que se acaba de acabar (si está configurado)
+ * Las alertas de hace más de 24 horas que nunca se mandaron se marcan sin enviar (ya no son noticia).
+ * @returns {Promise<{enviado:boolean, alertas?:number, correo?:boolean, whatsapp?:boolean, motivo?:string}>}
  */
 export async function revisarAvisos(db) {
   if (revisando) return { enviado: false, motivo: 'ocupado' };
   revisando = true;
   try {
     const ajuste = await leerAjuste(db);
-    if (!ajuste.aviso_automatico) return { enviado: false, motivo: 'apagado' };
-    if (!ajuste.correo_destino || !correoListo()) return { enviado: false, motivo: 'sin configurar' };
+    const porCorreo = Boolean(ajuste.aviso_automatico && ajuste.correo_destino && correoListo());
+    const porWhatsapp = Boolean(ajuste.whatsapp_automatico && ajuste.proveedor_whatsapp && whatsappListo());
+    if (!ajuste.aviso_automatico && !ajuste.whatsapp_automatico) return { enviado: false, motivo: 'apagado' };
+    if (!porCorreo && !porWhatsapp) return { enviado: false, motivo: 'sin configurar' };
 
     await db.query(`UPDATE alerta_stock SET notificada_en = NOW()
                     WHERE notificada_en IS NULL AND creada_en < NOW() - INTERVAL '24 hours'`);
     const { rows: nuevas } = await db.query(
-      `SELECT a.id, a.tipo, a.existencias, p.nombre AS producto
+      `SELECT a.id, a.tipo, a.existencias, a.producto_id, p.nombre AS producto
        FROM alerta_stock a JOIN producto p ON p.id = a.producto_id
        WHERE a.notificada_en IS NULL ORDER BY a.creada_en`,
     );
@@ -181,18 +191,40 @@ export async function revisarAvisos(db) {
     const ids = nuevas.map((a) => a.id);
     const productos = await porReponer(db);
     if (!productos.length) {
-      // Ya se repuso todo antes de que saliera el correo: no hay nada que avisar
+      // Ya se repuso todo antes de que saliera el aviso: no hay nada que avisar
       await db.query('UPDATE alerta_stock SET notificada_en = NOW() WHERE id = ANY($1)', [ids]);
       return { enviado: false, motivo: 'ya repuesto' };
     }
-    const titulo = nuevas.some((a) => a.tipo === 'agotado') ? 'Se agotaron productos' : 'Productos por acabarse';
-    await enviarCorreo({ para: ajuste.correo_destino, ...armarCorreo(productos, { titulo, nuevas }) });
+
+    let correo = false;
+    let whatsapp = false;
+    if (porCorreo) {
+      try {
+        const titulo = nuevas.some((a) => a.tipo === 'agotado') ? 'Se agotaron productos' : 'Productos por acabarse';
+        await enviarCorreo({ para: ajuste.correo_destino, ...armarCorreo(productos, { titulo, nuevas }) });
+        Object.assign(estadoAvisos, { ultimoEnvio: new Date().toISOString(), ultimoError: null });
+        correo = true;
+      } catch (error) { anotarError('ultimoError', error); }
+    }
+    if (porWhatsapp) {
+      // Al proveedor solo se le pide lo que se acaba de acabar (lo demás ya se le pidió antes)
+      const recientes = new Set(nuevas.map((a) => a.producto_id));
+      const items = productos.filter((p) => recientes.has(p.id)).map((p) => ({ nombre: p.nombre, cantidad: p.sugerido }));
+      if (items.length) {
+        try {
+          await enviarWhatsapp({ telefono: ajuste.proveedor_whatsapp, proveedor: ajuste.proveedor_nombre, items, mensaje: mensajeBase(items, ajuste.proveedor_nombre) });
+          Object.assign(estadoAvisos, { ultimoWhatsapp: new Date().toISOString(), errorWhatsapp: null });
+          whatsapp = true;
+        } catch (error) { anotarError('errorWhatsapp', error); }
+      }
+    }
+
+    // Si ningún canal salió, se reintenta en la siguiente vuelta
+    if (!correo && !whatsapp) return { enviado: false, motivo: estadoAvisos.ultimoError || estadoAvisos.errorWhatsapp };
     await db.query('UPDATE alerta_stock SET notificada_en = NOW() WHERE id = ANY($1)', [ids]);
-    Object.assign(estadoAvisos, { ultimoEnvio: new Date().toISOString(), ultimoError: null });
-    return { enviado: true, alertas: nuevas.length };
+    return { enviado: true, alertas: nuevas.length, correo, whatsapp };
   } catch (error) {
-    if (estadoAvisos.ultimoError !== error.message) console.warn('Aviso de reposición:', error.message);
-    estadoAvisos.ultimoError = error.message;
+    anotarError('ultimoError', error);
     return { enviado: false, motivo: error.message };
   } finally {
     revisando = false;

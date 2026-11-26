@@ -7,6 +7,7 @@ import {
   mensajeBase, normalizarWhatsapp, porReponer,
 } from '../services/avisos.js';
 import { iaActiva, pedirJson } from '../services/gemini.js';
+import { enviarWhatsapp, modoWhatsapp, queFaltaWhatsapp, whatsappListo } from '../services/whatsapp.js';
 import { fijarExistencias } from '../services/stock.js';
 import { bool, email, int, text } from '../validate.js';
 
@@ -17,6 +18,8 @@ import { bool, email, int, text } from '../validate.js';
 const router = Router();
 router.use(requiereSesion, permitir('administrador', 'vendedor'));
 const soloAdmin = permitir('administrador');
+// Interruptores: si no vienen en la petición se quedan como estaban
+const siVino = (v) => (v === undefined ? null : bool(v));
 
 // GET /api/admin/reposicion → inventario completo, ajustes y estado de los avisos
 router.get('/', handle(async (_req, res) => {
@@ -37,6 +40,11 @@ router.get('/', handle(async (_req, res) => {
       pendientes: pendientes.rows[0].n,
       ultimo_envio: estadoAvisos.ultimoEnvio,
       ultimo_error: estadoAvisos.ultimoError,
+      whatsapp: whatsappListo(),
+      whatsapp_modo: modoWhatsapp() || null,
+      whatsapp_falta: whatsappListo() ? null : queFaltaWhatsapp(),
+      ultimo_whatsapp: estadoAvisos.ultimoWhatsapp,
+      error_whatsapp: estadoAvisos.errorWhatsapp,
     },
     historial: historial.rows,
   });
@@ -52,10 +60,10 @@ router.put('/ajuste', soloAdmin, handle(async (req, res) => {
     throw new HttpError(422, 'El WhatsApp del proveedor debe tener 10 dígitos (o la lada del país y el número).');
   }
   const { rows } = await query(
-    `UPDATE ajuste_reposicion SET correo_destino = $1, aviso_automatico = $2, proveedor_nombre = $3,
-            proveedor_whatsapp = $4, actualizado_en = NOW()
+    `UPDATE ajuste_reposicion SET correo_destino = $1, aviso_automatico = COALESCE($2, aviso_automatico), proveedor_nombre = $3,
+            proveedor_whatsapp = $4, whatsapp_automatico = COALESCE($5, whatsapp_automatico), actualizado_en = NOW()
      WHERE id = 1 RETURNING *`,
-    [lista.join(', ') || null, bool(req.body.aviso_automatico), text(req.body.proveedor_nombre, 'nombre del proveedor', { max: 120, required: false }), telefono],
+    [lista.join(', ') || null, siVino(req.body.aviso_automatico), text(req.body.proveedor_nombre, 'nombre del proveedor', { max: 120, required: false }), telefono, siVino(req.body.whatsapp_automatico)],
   );
   res.json(rows[0]);
 }));
@@ -140,6 +148,27 @@ Responde solo JSON: {"mensaje": "..."}`,
     proveedor: ajuste.proveedor_nombre,
     url: enlaceWhatsapp(ajuste.proveedor_whatsapp, mensaje),
   });
+}));
+
+// POST /api/admin/reposicion/whatsapp { items: [{ id, cantidad }], mensaje } → lo manda directo al proveedor
+router.post('/whatsapp', handle(async (req, res) => {
+  const pedidos = Array.isArray(req.body?.items) ? req.body.items.slice(0, 40) : [];
+  if (!pedidos.length) throw new HttpError(422, 'Elige al menos un producto para pedir.');
+  const cantidades = new Map(pedidos.map((i) => [int(i.id, 'producto', { min: 1, max: 2_000_000_000 }), int(i.cantidad, 'cantidad', { min: 1, max: 1000 })]));
+  const { rows } = await query('SELECT id, nombre FROM producto WHERE id = ANY($1) AND eliminado_en IS NULL', [[...cantidades.keys()]]);
+  if (!rows.length) throw new HttpError(404, 'Esos productos no existen.');
+  const items = rows.map((p) => ({ nombre: p.nombre, cantidad: cantidades.get(p.id) }));
+
+  const ajuste = await leerAjuste({ query });
+  const mensaje = text(req.body.mensaje, 'mensaje', { max: 1500, required: false }) || mensajeBase(items, ajuste.proveedor_nombre);
+  if (!ajuste.proveedor_whatsapp) throw new HttpError(422, 'Primero guarda el WhatsApp del proveedor en Ajustes de avisos.');
+  if (!whatsappListo()) throw new HttpError(503, queFaltaWhatsapp());
+  try {
+    await enviarWhatsapp({ telefono: ajuste.proveedor_whatsapp, mensaje, items, proveedor: ajuste.proveedor_nombre });
+  } catch (error) {
+    throw new HttpError(502, error.message);
+  }
+  res.json({ enviado: true, telefono: ajuste.proveedor_whatsapp });
 }));
 
 // POST /api/admin/reposicion/reponer { items: [{ id, cantidad }] } → suma existencias de varios a la vez

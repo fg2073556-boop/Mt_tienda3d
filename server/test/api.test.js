@@ -24,6 +24,7 @@ const { pool } = await import('../src/db.js');
 const { crearApp } = await import('../src/app.js');
 const { sincronizarCuentas } = await import('../src/cuentas.js');
 const { revisarAvisos, usarTransporte } = await import('../src/services/avisos.js');
+const { enviarWhatsapp, usarWhatsappDePrueba } = await import('../src/services/whatsapp.js');
 
 let server;
 let base;
@@ -347,9 +348,9 @@ test('reposición: manda el reporte y el aviso automático junta las alertas en 
     assert.equal((await revisarAvisos(pool)).motivo, 'sin alertas');
 
     // Apagado: no manda nada
-    await pool.query('UPDATE ajuste_reposicion SET aviso_automatico = FALSE');
+    await pool.query('UPDATE ajuste_reposicion SET aviso_automatico = FALSE, whatsapp_automatico = FALSE');
     assert.equal((await revisarAvisos(pool)).motivo, 'apagado');
-    await pool.query('UPDATE ajuste_reposicion SET aviso_automatico = TRUE');
+    await pool.query('UPDATE ajuste_reposicion SET aviso_automatico = TRUE, whatsapp_automatico = TRUE');
   } finally { usarTransporte(null); }
 });
 
@@ -378,4 +379,75 @@ test('reposición: borrador de WhatsApp para el proveedor con y sin Gemini', asy
     assert.equal(r.body.conIA, false);
     assert.match(r.body.aviso, /mensaje base/);
   } finally { g.restaurar(); delete process.env.GEMINI_API_KEY; }
+});
+
+test('WhatsApp: sin configurar avisa qué falta; configurado se manda solo con las alertas', async () => {
+  const admin = await login('admin@test.mx');
+  const id = await idDe('silla-ergonomica-con-soporte-lumbar');
+  delete process.env.WHATSAPP_MODO;
+  const sin = await api('POST', '/api/admin/reposicion/whatsapp', { token: admin, body: { items: [{ id, cantidad: 2 }] } });
+  assert.equal(sin.status, 503);
+  assert.match(sin.body.error, /WHATSAPP_MODO/);
+
+  const mensajes = [];
+  usarWhatsappDePrueba(mensajes);
+  try {
+    const r = await api('POST', '/api/admin/reposicion/whatsapp', { token: admin, body: { items: [{ id, cantidad: 2 }], mensaje: 'Hola, mándenos 2 sillas.' } });
+    assert.equal(r.status, 200);
+    assert.deepEqual(mensajes[0], { telefono: '522221234567', mensaje: 'Hola, mándenos 2 sillas.', items: [{ nombre: 'Silla ergonómica con soporte lumbar', cantidad: 2 }], proveedor: 'Distribuidora Centro' });
+
+    // Solo WhatsApp (correo apagado): al agotarse la silla se le pide al proveedor automáticamente
+    await pool.query('UPDATE ajuste_reposicion SET aviso_automatico = FALSE');
+    await pool.query('UPDATE alerta_stock SET notificada_en = NOW()');
+    await api('PATCH', `/api/admin/productos/${id}/existencias`, { token: admin, body: { delta: -(await existencias('silla-ergonomica-con-soporte-lumbar')) } });
+    const a = await revisarAvisos(pool);
+    assert.equal(a.enviado, true, JSON.stringify(a));
+    assert.equal(a.whatsapp, true);
+    assert.equal(a.correo, false);
+    assert.equal(mensajes.length, 2);
+    assert.deepEqual(mensajes[1].items.map((i) => i.nombre), ['Silla ergonómica con soporte lumbar']);
+    assert.match(mensajes[1].mensaje, /Hola Distribuidora Centro/);
+    const estado = await api('GET', '/api/admin/reposicion', { token: admin });
+    assert.equal(estado.body.estado.whatsapp, true);
+    assert.ok(estado.body.estado.ultimo_whatsapp);
+  } finally {
+    usarWhatsappDePrueba(null);
+    await pool.query('UPDATE ajuste_reposicion SET aviso_automatico = TRUE');
+  }
+});
+
+test('WhatsApp: arma bien la petición para CallMeBot y para la API de Meta', async () => {
+  const real = globalThis.fetch;
+  const llamadas = [];
+  const items = [{ nombre: 'SSD NVMe 1 TB', cantidad: 4 }, { nombre: 'Silla', cantidad: 3 }];
+  try {
+    globalThis.fetch = async (url, op = {}) => { llamadas.push({ url: String(url), op }); return new Response('Message queued. You will receive it in a few seconds.'); };
+    Object.assign(process.env, { WHATSAPP_MODO: 'callmebot', WHATSAPP_CALLMEBOT_APIKEY: ' 123456 ' });
+    await enviarWhatsapp({ telefono: '522221234567', mensaje: 'Hola • 4 × SSD', items });
+    const u = new URL(llamadas[0].url);
+    assert.equal(u.host, 'api.callmebot.com');
+    assert.equal(u.searchParams.get('phone'), '+522221234567');
+    assert.equal(u.searchParams.get('apikey'), '123456');
+    assert.equal(u.searchParams.get('text'), 'Hola • 4 × SSD');
+
+    globalThis.fetch = async () => new Response('APIKey is invalid. Please check');
+    await assert.rejects(enviarWhatsapp({ telefono: '522221234567', mensaje: 'x', items }), /CallMeBot rechazó la llave/);
+
+    globalThis.fetch = async (url, op = {}) => { llamadas.push({ url: String(url), op }); return Response.json({ messages: [{ id: 'wamid.1' }] }); };
+    Object.assign(process.env, { WHATSAPP_MODO: 'meta', WHATSAPP_TOKEN: 'tok', WHATSAPP_PHONE_ID: '1065', WHATSAPP_PLANTILLA: 'reposicion_inventario' });
+    await enviarWhatsapp({ telefono: '522221234567', mensaje: 'no se usa', items, proveedor: 'Fernando' });
+    const meta = llamadas.at(-1);
+    assert.equal(meta.url, 'https://graph.facebook.com/v24.0/1065/messages');
+    assert.equal(meta.op.headers.Authorization, 'Bearer tok');
+    const cuerpo = JSON.parse(meta.op.body);
+    assert.equal(cuerpo.template.name, 'reposicion_inventario');
+    assert.deepEqual(cuerpo.template.components[0].parameters.map((p) => p.text), ['Fernando', '4 × SSD NVMe 1 TB; 3 × Silla']);
+
+    globalThis.fetch = async () => Response.json({ error: { code: 131047, message: 'Re-engagement message' } }, { status: 400 });
+    delete process.env.WHATSAPP_PLANTILLA;
+    await assert.rejects(enviarWhatsapp({ telefono: '522221234567', mensaje: 'x', items }), /24 h/);
+  } finally {
+    globalThis.fetch = real;
+    for (const k of ['WHATSAPP_MODO', 'WHATSAPP_CALLMEBOT_APIKEY', 'WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_PLANTILLA']) delete process.env[k];
+  }
 });
