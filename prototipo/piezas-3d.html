@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Piezas 3D realistas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: showroom técnico de M&T, sobrio y con brillo de producto
+   IDEA: vitrina nocturna donde cada componente se gira y se desarma como en una mesa de exhibición
+   PICTURE: cada pieza modelada en código con materiales metálicos, PCB con pistas y contactos dorados
+   COLOUR and TYPE: escenario #061018, menta #36e39a; Space Grotesk + Inter
+   LAYOUT: rejilla de tarjetas con miniatura renderizada; visor grande con ficha y controles */
+:root{color-scheme:dark;--bg:#061018;--card:#0d1f27;--line:#1c3540;--ink:#e4efec;--mute:#91a9af;--acc:#36e39a;--accInk:#052016;--warn:#fbbf24;--bad:#ff7b7b}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3{font-family:"Space Grotesk",Inter,sans-serif;margin:0;line-height:1.1;text-wrap:balance}
+.band{padding:clamp(24px,4vw,56px) max(5vw,16px)}.wrap{max-width:1240px;margin:auto}
+header h1{font-size:clamp(30px,4.2vw,48px)}header p{color:var(--mute);max-width:64ch;margin:10px 0 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));gap:16px;margin-top:28px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;cursor:pointer;text-align:left;color:inherit;padding:0;font:inherit;display:flex;flex-direction:column;transition:border-color .2s,transform .2s}
+.card:hover{border-color:#2f6b5a;transform:translateY(-2px)}.card:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.thumb{aspect-ratio:4/3;background:radial-gradient(90% 90% at 50% 35%,#13303a,#08161d 75%);display:grid;place-items:center}
+.thumb img{width:100%;height:100%;object-fit:contain}
+.cbody{padding:14px 16px 16px;display:grid;gap:4px}
+.cat{font-size:13px;color:var(--mute)}.cbody h3{font-size:17px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.price{font:700 20px "Space Grotesk",sans-serif;white-space:nowrap}
+.badge{font-size:13px;padding:2px 9px;border-radius:999px;white-space:nowrap;font-weight:500}
+.ok{color:var(--acc);background:#0c2a22}.lo{color:var(--warn);background:#2a2208}.out{color:var(--bad);background:#2c1214}
+.note{font-size:13px;color:var(--mute);margin-top:18px}
+/* Visor */
+.visor{position:fixed;inset:0;z-index:50;background:rgba(3,9,13,.92);display:grid;grid-template-columns:minmax(0,1fr) 360px}
+.visor[hidden]{display:none}
+.stage{position:relative;background:radial-gradient(80% 80% at 50% 40%,#123039,#061018 75%)}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}
+.hint{position:absolute;left:16px;bottom:14px;font-size:13px;color:#8fb0b8;pointer-events:none}
+.side{background:var(--card);border-left:1px solid var(--line);padding:22px;display:flex;flex-direction:column;gap:14px;overflow:auto}
+.side h2{font-size:26px}.desc{color:#a9c1c6;font-size:15px}
+.specs{margin:0;padding:0;list-style:none;font-size:14px}.specs li{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line)}.specs span{color:var(--mute)}
+button{min-height:44px;border-radius:10px;padding:0 16px;border:1px solid #24434f;background:transparent;color:var(--ink);font:600 15px Inter,sans-serif;cursor:pointer}
+button.prim{background:var(--acc);color:var(--accInk);border-color:transparent}
+button[aria-pressed=true]{border-color:var(--acc);color:var(--acc)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.ctrls{display:flex;flex-wrap:wrap;gap:8px}
+label.sl{display:grid;gap:6px;font-size:14px;color:var(--mute)}input[type=range]{width:100%;accent-color:var(--acc);min-height:24px}
+.close{position:absolute;top:14px;right:14px;z-index:2;background:rgba(6,16,24,.8)}
+.fail{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--mute)}
+@media(max-width:860px){.visor{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}.side{border-left:0;border-top:1px solid var(--line);max-height:46vh}}
+@media(prefers-reduced-motion:reduce){.card{transition:none}}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="wrap">
+    <h1>Componentes en 3D, hechos solo con código</h1>
+    <p>Cada pieza está modelada con three.js: sin archivos 3D, sin fotos y sin herramientas de pago. Toca una para girarla, acercarla y desarmarla.</p>
+    <div class="grid" id="grid"></div>
+    <p class="note">Precios y existencias de ejemplo del catálogo de M&amp;T.</p>
+  </div>
+</header>
+
+<div class="visor" id="visor" hidden role="dialog" aria-modal="true" aria-labelledby="vNombre">
+  <div class="stage" id="stage">
+    <button class="close" id="cerrar" aria-label="Cerrar visor">Cerrar</button>
+    <div class="hint">Arrastra para girar · rueda o pellizco para acercar</div>
+  </div>
+  <aside class="side">
+    <span class="cat" id="vCat"></span>
+    <h2 id="vNombre"></h2>
+    <p class="desc" id="vDesc"></p>
+    <div class="row"><span class="price" id="vPrecio"></span><span id="vStock"></span></div>
+    <ul class="specs" id="vSpecs"></ul>
+    <label class="sl" id="slWrap">Separar piezas<input type="range" id="sep" min="0" max="1" step="0.01" value="0"></label>
+    <div class="ctrls">
+      <button id="bAuto" aria-pressed="true">Giro automático</button>
+      <button id="bReset">Centrar vista</button>
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/RoundedBoxGeometry.js"></script>
+<script>
+{
+const T = window.THREE;
+const $ = (s) => document.querySelector(s);
+const money = (v) => '$' + v.toLocaleString('es-MX');
+
+/* ================= Texturas generadas con canvas ================= */
+const texCache = {};
+function canvasTex(key, w, h, draw, opts = {}) {
+  if (texCache[key]) return texCache[key];
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new T.CanvasTexture(c);
+  if (!opts.data) t.encoding = T.sRGBEncoding;
+  t.anisotropy = 8;
+  if (opts.repeat) { t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(...opts.repeat); }
+  return (texCache[key] = t);
+}
+function rnd(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+
+// Tarjeta de circuito: color de máscara, pistas, vías y serigrafía. Devuelve {map, bump}
+function pcb(key, color, w = 1024, h = 512, seed = 7) {
+  const trazos = (ctx, claro) => {
+    const r = rnd(seed);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 90; i++) {
+      let x = r() * w, y = r() * h;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      for (let k = 0; k < 4; k++) {
+        const d = 20 + r() * 120, dir = Math.floor(r() * 8) * Math.PI / 4;
+        x += Math.cos(dir) * d; y += Math.sin(dir) * d; ctx.lineTo(x, y);
+      }
+      ctx.lineWidth = 1 + r() * 2.5; ctx.strokeStyle = claro; ctx.stroke();
+    }
+    for (let i = 0; i < 260; i++) { ctx.beginPath(); ctx.arc(r() * w, r() * h, 1.5 + r() * 2, 0, 7); ctx.fillStyle = claro; ctx.fill(); }
+  };
+  const map = canvasTex(key + 'm', w, h, (ctx) => {
+    ctx.fillStyle = color; ctx.fillRect(0, 0, w, h);
+    trazos(ctx, 'rgba(255,255,255,.07)');
+    const r = rnd(seed + 3);
+    ctx.strokeStyle = 'rgba(235,240,235,.55)'; ctx.fillStyle = 'rgba(235,240,235,.6)'; ctx.font = '14px monospace'; ctx.lineWidth = 1.2;
+    for (let i = 0; i < 26; i++) {
+      const x = r() * w, y = r() * h, bw = 14 + r() * 40, bh = 8 + r() * 24;
+      ctx.strokeRect(x, y, bw, bh); if (r() > .6) ctx.fillText(['C', 'R', 'U', 'Q', 'L'][i % 5] + Math.floor(r() * 900), x, y - 3);
+    }
+  });
+  const bump = canvasTex(key + 'b', w, h, (ctx) => { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h); trazos(ctx, '#fff'); }, { data: true });
+  return { map, bump };
+}
+// Aluminio cepillado
+function cepillado(key, base, w = 512, h = 512) {
+  return canvasTex(key, w, h, (ctx) => {
+    ctx.fillStyle = base; ctx.fillRect(0, 0, w, h);
+    const r = rnd(11);
+    for (let i = 0; i < 1400; i++) { const y = r() * h; ctx.fillStyle = `rgba(255,255,255,${r() * .06})`; ctx.fillRect(0, y, w, 1); ctx.fillStyle = `rgba(0,0,0,${r() * .08})`; ctx.fillRect(0, r() * h, w, 1); }
+  });
+}
+// Etiqueta con textos
+function etiqueta(key, w, h, bg, fg, lineas, extra) {
+  return canvasTex(key, w, h, (ctx) => {
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    if (extra) extra(ctx, w, h);
+    ctx.fillStyle = fg; ctx.textBaseline = 'middle';
+    lineas.forEach(([txt, size, x, y, peso = '700', alin = 'left', color]) => {
+      ctx.font = `${peso} ${size}px "Space Grotesk", Arial, sans-serif`; ctx.textAlign = alin; ctx.fillStyle = color || fg; ctx.fillText(txt, x, y);
+    });
+  });
+}
+// Degradado RGB (se desplaza para animar)
+const rgbTex = canvasTex('rgb', 512, 8, (ctx, w) => {
+  const g = ctx.createLinearGradient(0, 0, w, 0);
+  ['#ff2d55', '#ffb020', '#36e39a', '#22d3ee', '#7c5cff', '#ff2d55'].forEach((c, i, a) => g.addColorStop(i / (a.length - 1), c));
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, 8);
+}, { repeat: [1, 1] });
+
+/* ================= Materiales ================= */
+const M = {
+  oro: new T.MeshStandardMaterial({ color: 0xe3b04b, metalness: 1, roughness: .28 }),
+  cobre: new T.MeshStandardMaterial({ color: 0xc8733f, metalness: 1, roughness: .3 }),
+  niquel: new T.MeshStandardMaterial({ color: 0xd9dde0, metalness: 1, roughness: .22 }),
+  acero: new T.MeshStandardMaterial({ color: 0xa9b0b5, metalness: .9, roughness: .38 }),
+  aluminio: new T.MeshStandardMaterial({ color: 0xc9ced3, metalness: .85, roughness: .32 }),
+  grafito: new T.MeshStandardMaterial({ color: 0x2b3136, metalness: .75, roughness: .38 }),
+  negroMate: new T.MeshStandardMaterial({ color: 0x15181b, metalness: .1, roughness: .7 }),
+  plastico: new T.MeshStandardMaterial({ color: 0x101214, metalness: 0, roughness: .6 }),
+  plasticoGris: new T.MeshStandardMaterial({ color: 0x3a4046, metalness: 0, roughness: .55 }),
+  chip: new T.MeshStandardMaterial({ color: 0x18191b, metalness: .2, roughness: .45 }),
+  ceramica: new T.MeshStandardMaterial({ color: 0x8a6a45, metalness: .1, roughness: .5 }),
+  rgb: new T.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveMap: rgbTex, map: rgbTex, emissiveIntensity: 1.6, roughness: .4 }),
+  aspaTranslucida: new T.MeshPhysicalMaterial({ color: 0x14181c, metalness: 0, roughness: .3, transparent: true, opacity: .9, clearcoat: .5, clearcoatRoughness: .25 }),
+};
+const pcbMat = (key, color, rep = [1, 1], seed) => {
+  const t = pcb(key, color, 1024, 512, seed); [t.map, t.bump].forEach((x) => { x.wrapS = x.wrapT = T.RepeatWrapping; x.repeat.set(...rep); });
+  return new T.MeshPhysicalMaterial({ map: t.map, bumpMap: t.bump, bumpScale: .015, roughness: .5, metalness: .05, clearcoat: .25, clearcoatRoughness: .35 });
+};
+const brushMat = (key, base, metal = .85, rough = .35) => new T.MeshStandardMaterial({ map: cepillado(key, base), metalness: metal, roughness: rough });
+const etiquetaMat = (tex, rough = .55) => new T.MeshStandardMaterial({ map: tex, roughness: rough, metalness: .05 });
+
+/* ================= Ayudas de geometría ================= */
+const caja = (w, h, d, mat, x = 0, y = 0, z = 0, par) => { const m = new T.Mesh(new T.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; par && par.add(m); return m; };
+const rcaja = (w, h, d, r, mat, x = 0, y = 0, z = 0, par) => { const m = new T.Mesh(new T.RoundedBoxGeometry(w, h, d, 3, r), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; par && par.add(m); return m; };
+const cil = (rt, rb, h, mat, x = 0, y = 0, z = 0, par, seg = 32) => { const m = new T.Mesh(new T.CylinderGeometry(rt, rb, h, seg), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; par && par.add(m); return m; };
+const plano = (w, h, mat, x = 0, y = 0, z = 0, par) => { const m = new T.Mesh(new T.PlaneGeometry(w, h), mat); m.position.set(x, y, z); m.receiveShadow = true; par && par.add(m); return m; };
+// Repite una misma pieza muchas veces de forma eficiente
+function repetir(geo, mat, posiciones, par) {
+  const im = new T.InstancedMesh(geo, mat, posiciones.length);
+  const o = new T.Object3D();
+  posiciones.forEach((p, i) => { o.position.set(p[0], p[1], p[2]); o.rotation.set(p[3] || 0, p[4] || 0, p[5] || 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); });
+  im.castShadow = im.receiveShadow = true; par && par.add(im); return im;
+}
+// Forma redondeada para extruir
+function rectRedondo(w, h, r) {
+  const s = new T.Shape(), x = -w / 2, y = -h / 2;
+  s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r); s.lineTo(x + w, y + h - r);
+  s.quadraticCurveTo(x + w, y + h, x + w - r, y + h); s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r);
+  s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y); return s;
+}
+const agujero = (x, y, r) => { const p = new T.Path(); p.absarc(x, y, r, 0, Math.PI * 2, true); return p; };
+const extruir = (shape, prof, mat, bevel = .04) => {
+  const g = new T.ExtrudeGeometry(shape, { depth: prof, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 40 });
+  g.translate(0, 0, -prof / 2);
+  const m = new T.Mesh(g, mat); m.castShadow = m.receiveShadow = true; return m;
+};
+// Ventilador: aro, aspas curvas y centro con etiqueta
+const aspasGiratorias = [];
+function ventilador(radio, { aro = true, rgb = false, aspas = 9, matAspa = M.aspaTranslucida } = {}) {
+  const g = new T.Group();
+  const aspa = new T.Shape();
+  aspa.moveTo(radio * .22, -radio * .05);
+  aspa.quadraticCurveTo(radio * .62, -radio * .32, radio * .93, -radio * .1);
+  aspa.quadraticCurveTo(radio * .8, radio * .2, radio * .26, radio * .14);
+  aspa.quadraticCurveTo(radio * .2, radio * .05, radio * .22, -radio * .05);
+  const geoAspa = new T.ExtrudeGeometry(aspa, { depth: radio * .012, bevelEnabled: true, bevelThickness: radio * .006, bevelSize: radio * .006, bevelSegments: 2, curveSegments: 16 });
+  const rotor = new T.Group();
+  for (let i = 0; i < aspas; i++) {
+    const m = new T.Mesh(geoAspa, matAspa); m.castShadow = true;
+    const piv = new T.Group(); piv.rotation.z = (i / aspas) * Math.PI * 2; m.rotation.y = .38; piv.add(m); rotor.add(piv);
+  }
+  const hubTex = etiqueta('hub', 256, 256, '#121416', '#cfd6da', [['M&T', 56, 128, 128, '700', 'center']], (ctx) => { ctx.strokeStyle = '#2c3237'; ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(128, 128, 112, 0, 7); ctx.stroke(); });
+  const hub = cil(radio * .25, radio * .25, radio * .16, [M.plastico, etiquetaMat(hubTex, .4), M.plastico], 0, 0, radio * .02, rotor);
+  hub.rotation.x = Math.PI / 2;
+  g.add(rotor); aspasGiratorias.push(rotor);
+  if (aro) {
+    const t = new T.Mesh(new T.TorusGeometry(radio * 1.02, radio * .045, 16, 96), rgb ? M.rgb : M.plastico);
+    t.castShadow = true; g.add(t);
+  }
+  return g;
+}
+
+/* ================= Modelos (unidades en centímetros) ================= */
+const MODELOS = {
+  ram() {
+    const g = new T.Group(), partes = [];
+    const pcbM = pcbMat('pcbRam', '#0c3a2c', [2, .5], 3);
+    const disipador = new T.MeshStandardMaterial({ map: cepillado('ramAl', '#3a4047'), metalness: .85, roughness: .34 });
+    const lbl = etiqueta('ramLbl', 1024, 160, '#1a1e22', '#e7ecef', [['M&T VANGUARD', 64, 40, 62], ['DDR5-6000  16 GB  CL30  1.35 V', 34, 40, 122, '500', 'left', '#9aa6ad']], (ctx) => { ctx.fillStyle = '#36e39a'; ctx.fillRect(0, 150, 1024, 10); });
+    [-0.55, 0.55].forEach((z, idx) => {
+      const mod = new T.Group(); mod.position.z = z;
+      caja(13.3, 3.1, .1, pcbM, 0, -.2, 0, mod);
+      // contactos dorados en ambas caras, con la muesca fuera del centro
+      const pos = [];
+      for (let i = 0; i < 72; i++) { const x = -6.4 + i * .18 + (i >= 34 ? .25 : 0); pos.push([x, -1.6, .056], [x, -1.6, -.056]); }
+      repetir(new T.BoxGeometry(.11, .42, .01), M.oro, pos, mod);
+      // chips de memoria visibles abajo del disipador
+      for (let i = 0; i < 4; i++) caja(1.1, .55, .06, M.chip, -4.5 + i * 3, -1.05, .08, mod);
+      // disipador de dos placas con bisel
+      const frente = rcaja(13.1, 2.55, .16, .06, disipador, 0, .12, .16, mod);
+      const atras = rcaja(13.1, 2.55, .16, .06, disipador, 0, .12, -.16, mod);
+      const tapa = rcaja(13.1, .32, .5, .1, M.grafito, 0, 1.45, 0, mod);
+      plano(10.5, 1.64, etiquetaMat(lbl, .5), -.8, -.02, .085, frente); // la etiqueta viaja con la placa frontal
+      // difusor RGB superior
+      const luz = rcaja(12.8, .38, .34, .12, M.rgb, 0, 1.75, 0, mod);
+      g.add(mod);
+      partes.push({ obj: frente, off: [0, 0, 1.4 * (idx ? 1 : 1)] }, { obj: atras, off: [0, 0, -1.4] }, { obj: tapa, off: [0, 1.6, 0] }, { obj: luz, off: [0, 2.6, 0] });
+    });
+    g.rotation.x = -.05;
+    return { g, partes };
+  },
+
+  cpu() {
+    const g = new T.Group(), partes = [];
+    const sustrato = pcbMat('pcbCpu', '#14452f', [1, 1], 21);
+    caja(4.0, .12, 4.0, sustrato, 0, 0, 0, g);
+    // capacitores pequeños alrededor del IHS
+    const smd = [];
+    for (let i = 0; i < 18; i++) { const a = i % 2 ? 1.75 : -1.75; smd.push([a, .08, -1.4 + Math.floor(i / 2) * .33]); }
+    repetir(new T.BoxGeometry(.12, .05, .07), M.ceramica, smd, g);
+    // IHS niquelado con texto grabado
+    const s = rectRedondo(3.3, 3.3, .25);
+    const ihsTex = etiqueta('ihs', 1024, 1024, '#c9cdd1', '#8d949a', [['RYZEN 7', 120, 512, 420, '700', 'center'], ['7700', 96, 512, 560, '700', 'center'], ['100-000000592  AM5', 44, 512, 700, '500', 'center']], (ctx, w, h) => {
+      const r = rnd(5); for (let i = 0; i < 900; i++) { ctx.fillStyle = `rgba(255,255,255,${r() * .05})`; ctx.fillRect(r() * w, r() * h, 2, 2); }
+    });
+    const ihs = extruir(s, .22, new T.MeshStandardMaterial({ map: ihsTex, metalness: 1, roughness: .2 }), .05);
+    ihs.rotation.x = -Math.PI / 2; ihs.position.y = .26;
+    // ajusta las UV de la cara superior al tamaño del IHS
+    const uv = ihs.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 3.3 + .5, uv.getY(i) / 3.3 + .5);
+    g.add(ihs);
+    // triángulo dorado de orientación
+    const tri = new T.Shape(); tri.moveTo(0, 0); tri.lineTo(.35, 0); tri.lineTo(0, .35); tri.closePath();
+    const t = new T.Mesh(new T.ShapeGeometry(tri), M.oro); t.rotation.x = -Math.PI / 2; t.position.set(-1.9, .065, 1.9); g.add(t);
+    // contactos dorados por abajo
+    const pads = []; for (let i = 0; i < 34; i++) for (let j = 0; j < 34; j++) pads.push([-1.8 + i * .109, -.066, -1.8 + j * .109]);
+    const contactos = repetir(new T.CylinderGeometry(.035, .035, .01, 8), M.oro, pads, g);
+    partes.push({ obj: ihs, off: [0, 1.8, 0] }, { obj: contactos, off: [0, -.9, 0] });
+    g.rotation.x = .35;
+    return { g, partes };
+  },
+
+  placa() {
+    const g = new T.Group(), partes = [];
+    const pcbM = pcbMat('pcbMb', '#101416', [3, 2.4], 9);
+    caja(30.5, .16, 24.4, pcbM, 0, 0, 0, g);
+    const top = .08;
+    // socket con marco metálico
+    const sock = new T.Group(); sock.position.set(-4, top, -3.2); g.add(sock);
+    caja(5.2, .25, 5.2, M.plastico, 0, .12, 0, sock);
+    caja(4.4, .05, 4.4, M.oro, 0, .26, 0, sock);
+    [[0, 2.6, 5.6, .5], [0, -2.6, 5.6, .5], [2.6, 0, .5, 5.6], [-2.6, 0, .5, 5.6]].forEach(([x, z, w, d]) => caja(w, .32, d, M.niquel, x, .2, z, sock));
+    cil(.07, .07, 5.2, M.niquel, 3.1, .3, 0, sock).rotation.x = Math.PI / 2;
+    // disipadores de VRM con aletas
+    const vrmMat = brushMat('vrm', '#30363c');
+    const vrm1 = new T.Group(); vrm1.position.set(-4, top, -8.3); g.add(vrm1);
+    rcaja(9, 1.3, 2.4, .12, vrmMat, 0, .7, 0, vrm1);
+    repetir(new T.BoxGeometry(.08, .9, 2.4), M.grafito, Array.from({ length: 30 }, (_, i) => [-4.3 + i * .3, 1.7, 0]), vrm1);
+    const vrm2 = new T.Group(); vrm2.position.set(-9.6, top, -2.5); g.add(vrm2);
+    rcaja(2.4, 1.3, 8, .12, vrmMat, 0, .7, 0, vrm2);
+    // cubierta de puertos traseros
+    const io = rcaja(2.6, 3.4, 9.5, .25, etiquetaMat(etiqueta('io', 256, 1024, '#1c2126', '#cfd6da', [['M&T', 70, 128, 120, '700', 'center']], (ctx) => { ctx.fillStyle = '#36e39a'; ctx.fillRect(110, 220, 36, 700); }), .4), -13.6, top + 1.7, -6.6, g);
+    // ranuras de memoria
+    const dimms = new T.Group(); dimms.position.set(3.4, top, -3.2); g.add(dimms);
+    for (let i = 0; i < 4; i++) {
+      const x = i * .95;
+      caja(.6, .75, 13.6, i % 2 ? M.plasticoGris : M.plastico, x, .38, 0, dimms);
+      caja(.62, .9, .55, M.plasticoGris, x, .45, 7.05, dimms); caja(.62, .9, .55, M.plasticoGris, x, .45, -7.05, dimms);
+    }
+    // conector ATX de 24 pines
+    rcaja(1.0, 1.0, 5.3, .05, M.plastico, 14.2, top + .5, -1.2, g);
+    // capacitores sólidos
+    const caps = []; for (let i = 0; i < 10; i++) caps.push([-8.4 + i * .55, top + .4, -6.7]); for (let i = 0; i < 8; i++) caps.push([-8.2, top + .4, -6 + i * .55]);
+    repetir(new T.CylinderGeometry(.22, .22, .8, 20), M.aluminio, caps, g);
+    // ranuras PCIe (la primera con blindaje metálico)
+    const pcie = (z, metal) => { const r = new T.Group(); r.position.set(-1.2, top, z); caja(8.9, .7, .7, M.plastico, 0, .35, 0, r); if (metal) caja(9.2, .75, .8, M.acero, 0, .36, 0, r).scale.set(1, 1, 1); g.add(r); return r; };
+    pcie(4.6, true); pcie(8.6, false);
+    caja(2.5, .7, .7, M.plastico, -4.4, top + .35, 10.6, g);
+    // cubierta M.2 y disipador del chipset
+    const m2 = rcaja(8, .35, 2.4, .1, brushMat('m2', '#3a4047'), -1, top + .2, 6.6, g);
+    const chipset = rcaja(5.6, .9, 5.2, .25, etiquetaMat(etiqueta('chipset', 512, 512, '#262c31', '#e3e8eb', [['B650', 90, 256, 230, '700', 'center'], ['M&T SERIES', 36, 256, 310, '500', 'center', '#36e39a']]), .38), 9.5, top + .45, 7.5, g);
+    // puertos SATA
+    for (let i = 0; i < 4; i++) caja(.8, .6, .45, M.plastico, 14.6, top + .3, 6 + i * .7, g);
+    partes.push({ obj: vrm1, off: [0, 3, 0] }, { obj: vrm2, off: [0, 3, 0] }, { obj: io, off: [0, 3.5, 0] }, { obj: m2, off: [0, 3, 0] }, { obj: chipset, off: [0, 3, 0] });
+    g.rotation.x = .25;
+    return { g, partes };
+  },
+
+  gpu() {
+    const g = new T.Group(), partes = [];
+    const L = 24, H = 11.2;
+    // tarjeta de circuito con contactos PCIe
+    const pcbM = pcbMat('pcbGpu', '#0d1f17', [2, 1], 33);
+    const placa = new T.Group(); g.add(placa);
+    caja(L - 2.5, H - 1.6, .16, pcbM, -.5, .5, 0, placa);
+    const pins = []; for (let i = 0; i < 70; i++) pins.push([-8.2 + i * .1 + (i > 10 ? .3 : 0), -H / 2 + .25, .086], [-8.2 + i * .1 + (i > 10 ? .3 : 0), -H / 2 + .25, -.086]);
+    repetir(new T.BoxGeometry(.07, .65, .01), M.oro, pins, placa);
+    caja(7.5, .1, .17, pcbM, -4.6, -H / 2 + .55, 0, placa);
+    rcaja(1.6, .9, .8, .05, M.plastico, 7.5, H / 2 - .1, 0, placa); // conector de 8 pines
+    // disipador de aletas y tubos de cobre
+    const disip = new T.Group(); disip.position.z = 1.05; g.add(disip);
+    repetir(new T.BoxGeometry(.05, H - 2.4, 1.6), M.aluminio, Array.from({ length: 150 }, (_, i) => [-11 + i * .147, .3, 0]), disip);
+    [-2.2, -.7, .8, 2.3].forEach((y) => { const tubo = cil(.18, .18, L - 2.2, M.cobre, -.4, y, -.6, disip, 16); tubo.rotation.z = Math.PI / 2; });
+    // carcasa frontal con huecos para ventiladores
+    const s = rectRedondo(L, H, .9);
+    const fx = [-5.6, 5.6];
+    fx.forEach((x) => s.holes.push(agujero(x, 0, 4.6)));
+    const carcasaMat = new T.MeshStandardMaterial({ map: cepillado('shroud', '#2a2f34'), metalness: .6, roughness: .42 });
+    const carcasa = extruir(s, .45, carcasaMat, .12); carcasa.position.z = 2.25; g.add(carcasa);
+    // acentos plateados
+    const acento = new T.Group(); acento.position.z = 2.55; carcasa.add(acento); acento.position.set(0, 0, .3);
+    caja(L - 3, .14, .08, M.niquel, 0, H / 2 - .5, 0, acento); caja(L - 3, .14, .08, M.niquel, 0, -H / 2 + .5, 0, acento);
+    caja(.14, H - 3, .08, M.niquel, 0, 0, 0, acento);
+    const ventis = new T.Group(); ventis.position.z = 2.05; g.add(ventis);
+    fx.forEach((x) => { const v = ventilador(4.5, { aro: false }); v.position.x = x; ventis.add(v); });
+    // barra RGB superior
+    const luz = rcaja(14, .22, .3, .1, M.rgb, 1, H / 2 + .1, 1.6, g);
+    // placa trasera con ventilas
+    const bp = rectRedondo(L - .6, H - .6, .6);
+    for (let i = 0; i < 8; i++) { const h = new T.Path(); const x = 5 + i * .7; h.moveTo(x, -2.5); h.lineTo(x + .3, -2.5); h.lineTo(x + .3, 2.5); h.lineTo(x, 2.5); h.closePath(); bp.holes.push(h); }
+    const trasera = extruir(bp, .12, brushMat('back', '#3b4148', .9, .3), .03); trasera.position.z = -.35; g.add(trasera);
+    // soporte metálico de salidas de video
+    const soporte = new T.Group(); soporte.position.set(-L / 2 - .1, -.2, .6); g.add(soporte);
+    caja(.12, H - .4, 3.6, M.acero, 0, 0, 0, soporte);
+    [-2.6, -1, .6].forEach((y) => caja(.3, .9, 1.3, M.negroMate, -.1, y, .3, soporte));
+    partes.push({ obj: carcasa, off: [0, 0, 5] }, { obj: ventis, off: [0, 0, 6.6] }, { obj: luz, off: [0, 2, 4] }, { obj: disip, off: [0, 0, 2.6] }, { obj: trasera, off: [0, 0, -3] }, { obj: soporte, off: [-3, 0, 0] });
+    g.rotation.y = -.15;
+    return { g, partes };
+  },
+
+  ssd() {
+    const g = new T.Group(), partes = [];
+    // placa con la muesca del tornillo y la llave M
+    const s = new T.Shape(); const w = 8, h = 2.2;
+    s.moveTo(-w / 2, -h / 2); s.lineTo(w / 2 - .25, -h / 2); s.lineTo(w / 2 - .25, -.05); s.lineTo(w / 2, -.05); s.lineTo(w / 2, h / 2); s.lineTo(-w / 2 + .35, h / 2);
+    s.absarc(-w / 2 + .35, 0, .35, Math.PI / 2, -Math.PI / 2, false); s.lineTo(-w / 2, -h / 2 + .75); s.lineTo(-w / 2, -h / 2);
+    const pcbM = pcbMat('pcbSsd', '#0e2238', [1, 1], 44);
+    const placa = extruir(s, .08, pcbM, .005); placa.rotation.x = -Math.PI / 2; g.add(placa);
+    const pins = []; for (let i = 0; i < 30; i++) { const z = -1.0 + i * .07 + (i > 24 ? 0 : 0); if (z > .1 && z < .25) continue; pins.push([w / 2 - .2, .045, z], [w / 2 - .2, -.045, z]); }
+    repetir(new T.BoxGeometry(.38, .01, .045), M.oro, pins, g);
+    const chip = (x, z, cw, cd, txt) => { const m = rcaja(cw, .12, cd, .02, [M.chip, M.chip, etiquetaMat(etiqueta('chip' + txt, 256, 256, '#17181a', '#8b9196', [[txt, 34, 128, 128, '600', 'center']]), .4), M.chip, M.chip, M.chip], x, .11, z, g); return m; };
+    const nand1 = chip(-1.6, 0, 1.4, 1.5, 'NAND'), nand2 = chip(.1, 0, 1.4, 1.5, 'NAND'), ctrl = chip(2.2, -.1, 1.1, 1.1, 'CTRL');
+    const lbl = etiqueta('ssdLbl', 1024, 300, '#101418', '#eef2f4', [['M&T NOVA', 74, 40, 90], ['NVMe PCIe 4.0  ·  1 TB', 40, 40, 170, '500', 'left', '#9aa6ad'], ['5000 MB/s', 40, 40, 240, '700', 'left', '#36e39a']]);
+    const sticker = plano(5.2, 1.6, etiquetaMat(lbl, .65), -.6, .2, 0, g); sticker.rotation.x = -Math.PI / 2;
+    partes.push({ obj: sticker, off: [0, 1.2, 0] }, { obj: nand1, off: [0, .5, 0] }, { obj: nand2, off: [0, .5, 0] }, { obj: ctrl, off: [0, .5, 0] });
+    g.rotation.x = .5;
+    return { g, partes };
+  },
+
+  fuente() {
+    const g = new T.Group(), partes = [];
+    const W = 15, H = 8.6, D = 14;
+    const cuerpoMat = new T.MeshStandardMaterial({ map: cepillado('psu', '#1d2125'), metalness: .55, roughness: .5 });
+    rcaja(W, H, D, .35, cuerpoMat, 0, 0, 0, g);
+    // ventilador superior con rejilla
+    const vent = ventilador(6.2, { aro: false, aspas: 7, matAspa: M.plastico }); vent.rotation.x = -Math.PI / 2; vent.position.y = H / 2 - .1; g.add(vent);
+    const rejilla = new T.Group(); rejilla.position.y = H / 2 + .05; g.add(rejilla);
+    [1.5, 2.8, 4.1, 5.4, 6.4].forEach((r) => { const t = new T.Mesh(new T.TorusGeometry(r, .06, 8, 80), M.acero); t.rotation.x = Math.PI / 2; t.castShadow = true; rejilla.add(t); });
+    [0, 1, 2, 3].forEach((i) => { const b = caja(12.8, .1, .12, M.acero, 0, 0, 0, rejilla); b.rotation.y = i * Math.PI / 4; });
+    // etiqueta lateral
+    const lbl = etiqueta('psuLbl', 1024, 600, '#e9ecee', '#15191c', [['M&T VOLT 750', 84, 50, 100], ['80 PLUS GOLD  ·  Totalmente modular', 40, 50, 190, '500'], ['+12V  62.5 A  750 W', 46, 50, 300, '700'], ['AC 100-240 V ~ 10 A  50/60 Hz', 34, 50, 380, '500', 'left', '#444']], (ctx) => { ctx.fillStyle = '#d4a63a'; ctx.fillRect(820, 420, 160, 140); ctx.fillStyle = '#111'; ctx.font = '700 40px Arial'; ctx.fillText('GOLD', 845, 500); });
+    plano(10, 5.8, etiquetaMat(lbl, .6), 0, 0, D / 2 + .01, g);
+    // panel modular trasero
+    const panel = new T.Group(); panel.position.x = W / 2 + .02; g.add(panel);
+    const con = (y, z, w, h) => { const m = rcaja(.3, h, w, .04, M.plastico, .1, y, z, panel); return m; };
+    con(2, -2.5, 4.2, 1.1); con(2, 2.3, 2.2, 1.1); con(.4, -3.5, 2.2, 1.1); con(.4, -.8, 2.2, 1.1); con(.4, 1.9, 2.2, 1.1); con(-1.2, -3.5, 2.2, .9); con(-1.2, -.8, 2.2, .9); con(-1.2, 1.9, 2.2, .9);
+    // interruptor y conector de corriente del otro lado
+    const atras = new T.Group(); atras.position.x = -W / 2 - .02; g.add(atras);
+    rcaja(.4, 1.6, 2.6, .1, M.plastico, -.1, 1.5, -3, atras);
+    rcaja(.4, 1.2, 1.4, .1, M.plastico, -.1, 1.5, .2, atras);
+    partes.push({ obj: rejilla, off: [0, 3, 0] }, { obj: vent, off: [0, 1.6, 0] });
+    g.rotation.y = -.5;
+    return { g, partes };
+  },
+
+  ventilador() {
+    const g = new T.Group(), partes = [];
+    const s = rectRedondo(12, 12, 1);
+    s.holes.push(agujero(0, 0, 5.75));
+    [[-5.2, -5.2], [5.2, -5.2], [-5.2, 5.2], [5.2, 5.2]].forEach(([x, y]) => s.holes.push(agujero(x, y, .25)));
+    const marco = extruir(s, 2.5, new T.MeshStandardMaterial({ color: 0x0d0f11, roughness: .5, metalness: .1 }), .1);
+    g.add(marco);
+    const v = ventilador(5.5, { rgb: true }); g.add(v);
+    // soportes del motor
+    [0, 1, 2, 3].forEach((i) => { const b = caja(5.6, .25, .15, M.plastico, 0, 0, -1.05, g); b.rotation.z = Math.PI / 4 + i * Math.PI / 2; b.position.set(Math.cos(Math.PI / 4 + i * Math.PI / 2) * 2.9, Math.sin(Math.PI / 4 + i * Math.PI / 2) * 2.9, -1.05); });
+    partes.push({ obj: v, off: [0, 0, 4] });
+    g.rotation.y = .35;
+    return { g, partes };
+  },
+};
+
+const PRODUCTOS = [
+  { id: 'gpu', nombre: 'Tarjeta de video RTX 4060 8 GB', cat: 'Componentes', precio: 6999, stock: 2, desc: 'Doble ventilador, disipador de aletas con 4 tubos de cobre y placa trasera de aluminio.', specs: [['Memoria', '8 GB GDDR6'], ['Interfaz', 'PCIe 4.0 x16'], ['Alimentación', '1 × 8 pines'], ['Largo', '24 cm']] },
+  { id: 'ram', nombre: 'Memoria 32 GB DDR5 RGB (2×16)', cat: 'Componentes', precio: 2199, stock: 12, desc: 'Dos módulos con disipador de aluminio y difusor RGB superior.', specs: [['Velocidad', '6000 MT/s'], ['Latencia', 'CL30'], ['Voltaje', '1.35 V'], ['Módulos', '2 × 16 GB']] },
+  { id: 'cpu', nombre: 'Procesador Ryzen 7 7700', cat: 'Componentes', precio: 5899, stock: 7, desc: 'Encapsulado LGA con IHS niquelado y contactos dorados en la base.', specs: [['Núcleos / hilos', '8 / 16'], ['Frecuencia máx.', '5.3 GHz'], ['Socket', 'AM5'], ['TDP', '65 W']] },
+  { id: 'placa', nombre: 'Tarjeta madre ATX B650', cat: 'Componentes', precio: 3899, stock: 4, desc: 'Socket AM5, disipadores de VRM con aletas, ranura PCIe reforzada y cubierta M.2.', specs: [['Formato', 'ATX 30.5 × 24.4 cm'], ['Memoria', '4 × DDR5'], ['Almacenamiento', 'M.2 + 4 SATA'], ['Chipset', 'B650']] },
+  { id: 'ssd', nombre: 'SSD NVMe 1 TB', cat: 'Componentes', precio: 1299, stock: 0, desc: 'Formato M.2 2280 con chips NAND, controlador y llave M.', specs: [['Lectura', '5000 MB/s'], ['Interfaz', 'PCIe 4.0 x4'], ['Formato', 'M.2 2280'], ['Capacidad', '1 TB']] },
+  { id: 'fuente', nombre: 'Fuente 750 W 80+ Gold', cat: 'Componentes', precio: 1799, stock: 5, desc: 'Totalmente modular, ventilador de 135 mm con rejilla y panel de conectores.', specs: [['Potencia', '750 W'], ['Eficiencia', '80 PLUS Gold'], ['Modular', 'Sí, total'], ['Ventilador', '135 mm']] },
+  { id: 'ventilador', nombre: 'Ventilador RGB 120 mm', cat: 'Componentes', precio: 799, stock: 9, desc: 'Marco con anillo RGB y aspas translúcidas de alto flujo.', specs: [['Tamaño', '120 mm'], ['Velocidad', '500–1800 RPM'], ['Iluminación', 'ARGB 5 V'], ['Ruido', '≤ 27 dBA']] },
+];
+
+const badge = (s) => s <= 0 ? '<span class="badge out">Agotado</span>' : s <= 2 ? `<span class="badge lo">Quedan ${s}</span>` : `<span class="badge ok">${s} en existencia</span>`;
+
+/* ================= Motor de render ================= */
+let R;
+try { R = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); } catch (e) { R = null; }
+const S = new T.Scene();
+const C = new T.PerspectiveCamera(35, 1, .1, 500);
+if (R) {
+  R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  R.outputEncoding = T.sRGBEncoding; R.toneMapping = T.ACESFilmicToneMapping; R.toneMappingExposure = 1.05;
+  R.physicallyCorrectLights = true; R.shadowMap.enabled = true; R.shadowMap.type = T.PCFSoftShadowMap;
+  // Reflejos realistas: un "cuarto" virtual con luces suaves
+  const pm = new T.PMREMGenerator(R);
+  S.environment = pm.fromScene(new T.RoomEnvironment(), .04).texture;
+}
+const sol = new T.DirectionalLight(0xffffff, 2.2); sol.position.set(6, 12, 8); sol.castShadow = true;
+sol.shadow.mapSize.set(2048, 2048); sol.shadow.bias = -.0004; sol.shadow.radius = 4; S.add(sol);
+const rim = new T.DirectionalLight(0x7fe9c0, .9); rim.position.set(-8, 4, -6); S.add(rim);
+const piso = new T.Mesh(new T.PlaneGeometry(200, 200), new T.ShadowMaterial({ opacity: .35 })); piso.rotation.x = -Math.PI / 2; piso.receiveShadow = true; S.add(piso);
+
+let actual = null; // { g, partes, base: [] }
+function construir(id) {
+  if (actual) { S.remove(actual.g); }
+  aspasGiratorias.length = 0;
+  const m = MODELOS[id]();
+  // centrar y apoyar en el piso
+  const caja3 = new T.Box3().setFromObject(m.g), c = caja3.getCenter(new T.Vector3());
+  m.g.position.sub(new T.Vector3(c.x, caja3.min.y, c.z));
+  m.partes.forEach((p) => { p.base = p.obj.position.clone(); p.offV = new T.Vector3(...p.off); });
+  // Los plásticos y la fibra de la PCB reflejan menos el entorno que los metales
+  m.g.traverse((o) => {
+    if (!o.isMesh) return;
+    [].concat(o.material).forEach((mat) => {
+      if (mat.userData.ajustado) return;
+      mat.userData.ajustado = true;
+      mat.envMapIntensity = mat.emissiveMap ? 1 : mat.metalness >= .5 ? 1 : .32;
+    });
+  });
+  S.add(m.g);
+  const tam = caja3.getSize(new T.Vector3());
+  m.radio = Math.max(tam.x, tam.y, tam.z) * .62; m.altura = tam.y;
+  actual = m;
+  // sombra ajustada al tamaño de la pieza
+  const r = m.radio * 1.6; Object.assign(sol.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: .1, far: r * 6 }); sol.shadow.camera.updateProjectionMatrix();
+  sol.position.set(m.radio * .9, m.radio * 2.2, m.radio * 1.3); sol.target = m.g;
+  return m;
+}
+function encuadrar(m, ctrl) {
+  const d = m.radio / Math.sin((C.fov * Math.PI / 180) / 2) * .95;
+  C.position.set(d * .55, m.altura * .5 + d * .45, d * .75);
+  C.near = d / 100; C.far = d * 20; C.updateProjectionMatrix();
+  if (ctrl) { ctrl.target.set(0, m.altura * .45, 0); ctrl.minDistance = d * .35; ctrl.maxDistance = d * 2.2; ctrl.update(); } else C.lookAt(0, m.altura * .45, 0);
+}
+
+/* ================= Miniaturas: se renderizan una vez ================= */
+const grid = $('#grid');
+grid.innerHTML = PRODUCTOS.map((p, i) => `<button class="card" data-i="${i}"><div class="thumb"><span class="cat">Cargando…</span></div><div class="cbody"><span class="cat">${p.cat}</span><h3>${p.nombre}</h3><div class="row"><span class="price">${money(p.precio)}</span>${badge(p.stock)}</div></div></button>`).join('');
+if (R) {
+  R.setSize(560, 420, false); C.aspect = 4 / 3; C.updateProjectionMatrix();
+  PRODUCTOS.forEach((p, i) => {
+    const m = construir(p.id); encuadrar(m);
+    R.render(S, C);
+    const img = new Image(); img.alt = ''; img.src = R.domElement.toDataURL('image/png');
+    grid.children[i].querySelector('.thumb').replaceChildren(img);
+  });
+} else {
+  grid.querySelectorAll('.thumb').forEach((t) => (t.innerHTML = '<span class="cat">Tu navegador no soporta 3D</span>'));
+}
+
+/* ================= Visor ================= */
+const visor = $('#visor'), stage = $('#stage');
+let ctrl = null, raf = 0, auto = true, sep = 0, sepMeta = 0, ultimo = 0;
+if (R) {
+  stage.prepend(R.domElement);
+  ctrl = new T.OrbitControls(C, R.domElement);
+  ctrl.enableDamping = true; ctrl.dampingFactor = .08; ctrl.enablePan = false; ctrl.autoRotateSpeed = 1.4;
+  ctrl.maxPolarAngle = Math.PI * .49;
+  ctrl.addEventListener('start', () => { R.domElement.style.cursor = 'grabbing'; });
+  ctrl.addEventListener('end', () => { R.domElement.style.cursor = 'grab'; });
+} else {
+  stage.insertAdjacentHTML('afterbegin', '<div class="fail">Tu navegador no pudo iniciar la vista 3D.</div>');
+}
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function ajustar() { if (!R) return; const w = stage.clientWidth, h = stage.clientHeight; R.setSize(w, h, false); C.aspect = w / h; C.updateProjectionMatrix(); }
+const ro = new ResizeObserver(ajustar); ro.observe(stage);
+
+function abrir(i) {
+  const p = PRODUCTOS[i];
+  $('#vCat').textContent = p.cat; $('#vNombre').textContent = p.nombre; $('#vDesc').textContent = p.desc;
+  $('#vPrecio').textContent = money(p.precio); $('#vStock').innerHTML = badge(p.stock);
+  $('#vSpecs').innerHTML = p.specs.map(([k, v]) => `<li><span>${k}</span><b>${v}</b></li>`).join('');
+  visor.hidden = false; document.body.style.overflow = 'hidden';
+  sep = sepMeta = 0; $('#sep').value = 0;
+  if (!R) return;
+  ajustar();
+  const m = construir(p.id);
+  $('#slWrap').hidden = !m.partes.length;
+  encuadrar(m, ctrl);
+  auto = !reduce; $('#bAuto').setAttribute('aria-pressed', auto);
+  cancelAnimationFrame(raf); ultimo = performance.now(); raf = requestAnimationFrame(loop);
+  $('#cerrar').focus();
+}
+function cerrar() { visor.hidden = true; document.body.style.overflow = ''; cancelAnimationFrame(raf); const b = grid.querySelector(`[data-i="${abierto}"]`); b && b.focus(); }
+let abierto = 0;
+function loop(now) {
+  const dt = Math.min((now - ultimo) / 1000, .05); ultimo = now;
+  ctrl.autoRotate = auto; ctrl.update();
+  aspasGiratorias.forEach((r) => { r.rotation.z += dt * (reduce ? 1 : 7); });
+  rgbTex.offset.x = (rgbTex.offset.x + dt * .12) % 1;
+  sep += (sepMeta - sep) * (1 - Math.pow(.001, dt));
+  if (actual) actual.partes.forEach((p) => p.obj.position.copy(p.base).addScaledVector(p.offV, sep));
+  R.render(S, C);
+  raf = requestAnimationFrame(loop);
+}
+
+grid.addEventListener('click', (e) => { const b = e.target.closest('.card'); if (b) { abierto = +b.dataset.i; abrir(abierto); } });
+$('#cerrar').addEventListener('click', cerrar);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !visor.hidden) cerrar(); });
+$('#sep').addEventListener('input', (e) => { sepMeta = +e.target.value; });
+$('#bAuto').addEventListener('click', () => { auto = !auto; $('#bAuto').setAttribute('aria-pressed', auto); });
+$('#bReset').addEventListener('click', () => { if (actual) { encuadrar(actual, ctrl); sepMeta = 0; $('#sep').value = 0; } });
+}
+</script>
+</body>
+</html>
