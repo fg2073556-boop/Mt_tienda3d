@@ -100,11 +100,14 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 | `POST /api/pedidos` | Público | Compra todo-o-nada; descuenta existencias |
 | `POST /api/asesor` | Público | Recomendación con Gemini (o reglas sin llave) |
 | `POST /api/pedidos/seguimiento` | Público | Estado del pedido con folio y correo |
+| `GET /api/pagos/config` | Público | Si hay Openpay y su llave pública |
+| `POST /api/pagos/openpay/webhook` | Openpay | Avisa pagos; se confirman consultando a Openpay |
 | `POST /api/auth/login` | Público | Devuelve el token JWT |
 | `GET /api/admin/resumen` | Ambos roles | Ventas del día, pedidos, alertas |
 | `POST/PUT/DELETE /api/admin/productos` | Administrador | Alta, edición (con foto y .glb) y baja |
 | `PATCH /api/admin/productos/:id/existencias` | Ambos roles | Sumar o restar existencias |
 | `PATCH /api/admin/pedidos/:id/estado` | Ambos roles | Cambiar estado; cancelar regresa piezas |
+| `POST /api/admin/pedidos/:id/revisar-pago` | Ambos roles | Pregunta a Openpay si ya se pagó |
 | `POST /api/admin/ia/descripcion` | Administrador | Redacta la descripción de un producto con Gemini |
 | `POST /api/admin/ia/resumir-ficha` | Administrador | Explica una ficha técnica en PDF con Gemini |
 | `GET /api/admin/reposicion` | Ambos roles | Inventario con estado (agotado, por acabarse, sano) y cantidad sugerida |
@@ -170,6 +173,29 @@ Cuando algo se agota o llega a su mínimo, el servidor también le manda al prov
 
 Sin `WHATSAPP_MODO`, el pedido se abre en WhatsApp con el texto listo para que lo envíe una persona.
 
+## Pagos con Openpay
+
+La página de pago usa [Openpay.js](https://github.com/open-pay/openpay-js) (copiado en `client/public/openpay/`) con tres formas de pago:
+
+| Forma | Cómo funciona |
+|---|---|
+| **Tarjeta de crédito o débito** | Openpay.js convierte la tarjeta en un *token* en el navegador y genera el identificador antifraude; el servidor solo cobra el token. El número de tarjeta **nunca** llega a la tienda: solo se guardan marca y últimos 4 dígitos. Si Openpay la rechaza, no se guarda el pedido ni se descuentan existencias. |
+| **Transferencia SPEI** | Openpay da una CLABE y una referencia para pagar desde la app de cualquier banco. |
+| **Efectivo en tienda** | Openpay da una referencia y un código de barras para pagar en tiendas afiliadas a Paynet. |
+
+Las transferencias y pagos en tienda quedan *Pendientes* y pasan a *Pagado* solos: por el webhook `POST /api/pagos/openpay/webhook` (que vuelve a consultar el cargo en Openpay antes de creerle) o por la revisión automática cada 2 minutos, que funciona aunque la tienda corra en tu computadora. En el panel, cada pedido tiene **Revisar pago con Openpay**.
+
+Para activarlo, crea una cuenta en el [sandbox de Openpay](https://sandbox-dashboard.openpay.mx) y pon en `server/.env` las llaves de *Configuración → Llaves de API*:
+
+```
+OPENPAY_MERCHANT_ID=m…
+OPENPAY_PUBLIC_KEY=pk_…
+OPENPAY_PRIVATE_KEY=sk_…
+OPENPAY_PRODUCCION=false
+```
+
+Sin llaves, la tienda sigue con el pago simulado. Nunca subas la llave privada (`sk_…`) a GitHub.
+
 ## Pruebas
 
 ```bash
@@ -178,7 +204,7 @@ cd server
 DB_NAME=mt_tienda_test npm test              # PowerShell: $env:DB_NAME="mt_tienda_test"; npm test
 ```
 
-Son 22 pruebas: cuentas, catálogo, compra, stock, roles, pedidos, seguimiento, IA, reposición y WhatsApp. Gemini, el correo y WhatsApp se simulan en las pruebas, así que no gastan cuota ni mandan correos.
+Son 28 pruebas: cuentas, catálogo, compra, stock, roles, pedidos, seguimiento, IA, reposición, WhatsApp, fotos y pagos con Openpay. Gemini, el correo, WhatsApp y Openpay se simulan en las pruebas, así que no gastan cuota ni mandan correos.
 
 ## Usar la IA (Gemini)
 
