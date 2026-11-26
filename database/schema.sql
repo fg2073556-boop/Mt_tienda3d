@@ -61,6 +61,15 @@ CREATE TABLE pedido (
     pago_estado       VARCHAR(30),
     pago_datos        JSONB,                  -- CLABE, referencia, tarjeta (solo últimos 4)…
     pagado_en         TIMESTAMPTZ,
+    -- Envío dentro de Puebla (vacío si solo se compró software). Zonas y códigos postales:
+    -- tablas zona_envio, municipio_envio y codigo_postal (database/migraciones/008 y 009)
+    envio_cp          CHAR(5),
+    envio_colonia     VARCHAR(120),
+    envio_municipio   VARCHAR(80),
+    envio_zona        VARCHAR(60),
+    envio_km          NUMERIC(6,1),
+    envio_dias        VARCHAR(20),
+    envio_costo       NUMERIC(8,2)  NOT NULL DEFAULT 0,
     creado_en         TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     actualizado_en    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
