@@ -19,11 +19,11 @@ def svg_nodo(n):
     return f'<rect x="{x-w/2}" y="{y-h/2}" width="{w}" height="{h}" rx="{rx}" fill="{fill}" stroke="{st}" stroke-width="2.5"/>'
 def html_texto(n):
     color={'inicio':'#fff','srv':'#fff'}.get(n['forma'],TINTA)
-    fs=19 if n['forma']!='rombo' else 18
+    fs=n.get('fs') or (19 if n['forma']!='rombo' else 18)
     return (f'<div style="position:absolute;left:{n["x"]-n["w"]/2}px;top:{n["y"]-n["h"]/2}px;width:{n["w"]}px;height:{n["h"]}px;'
             f'display:flex;align-items:center;justify-content:center;text-align:center;padding:0 {14 if n["forma"]!="rombo" else 34}px;box-sizing:border-box;'
             f'font:600 {fs}px/1.25 Arial,sans-serif;color:{color}">{n["texto"]}</div>')
-def generar(nombre, titulo, nodos, aristas, leyenda=''):
+def generar(nombre, titulo, nodos, aristas, leyenda='', H=H):
     s=[f'<svg width="{W}" height="{H}" style="position:absolute;left:0;top:0"><defs><marker id="f" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" refX="14" refY="8" orient="auto"><path d="M0,1 L16,8 L0,15 z" fill="{VERDE}"/></marker></defs>']
     etiquetas=[]
     for a in aristas:
@@ -33,7 +33,7 @@ def generar(nombre, titulo, nodos, aristas, leyenda=''):
         s.append(f'<path d="{d}" fill="none" stroke="{VERDE}" stroke-width="2.6" marker-end="url(#f)"/>')
         if a.get('txt'):
             ex,ey=a.get('en',((pts[0][0]+pts[1][0])/2,(pts[0][1]+pts[1][1])/2))
-            etiquetas.append(f'<div style="position:absolute;left:{ex-55}px;top:{ey-14}px;width:110px;text-align:center;font:700 16px Arial;color:{VERDE}">{a["txt"]}</div>')
+            etiquetas.append(f'<div style="position:absolute;left:{ex-100}px;top:{ey-14}px;width:200px;text-align:center;font:700 16px Arial;color:{VERDE}">{a["txt"]}</div>')
     for n in nodos.values(): s.append(svg_nodo(n))
     s.append('</svg>')
     cuerpo=''.join(s)+''.join(html_texto(n) for n in nodos.values())+''.join(etiquetas)
@@ -43,36 +43,55 @@ def generar(nombre, titulo, nodos, aristas, leyenda=''):
 
 N=nodo
 compra={
- 'A':N(130,150,190,70,'inicio','Cliente entra<br>a la tienda'),
- 'B':N(370,150,210,80,'proc','Ve el catálogo y<br>las piezas en 3D'),
- 'C':N(620,150,200,120,'rombo','¿Necesita<br>ayuda?'),
- 'D':N(620,330,250,80,'proc','Asesor con Gemini<br>recomienda productos'),
- 'E':N(880,150,200,70,'proc','Agrega al carrito'),
- 'F':N(1130,150,210,80,'proc','Captura sus datos<br>y forma de pago'),
- 'G':N(1430,150,250,90,'srv','Servidor: transacción<br>que bloquea los productos'),
- 'H':N(1430,470,220,130,'rombo','¿Alcanzan las<br>existencias?'),
- 'I':N(1150,330,270,80,'alerta','Aviso "solo quedan N"<br>no se guarda nada'),
- 'J':N(1120,470,270,90,'proc','Crea el pedido con folio<br>y descuenta existencias'),
- 'K':N(820,470,210,130,'rombo','¿Quedó en 0<br>o en el mínimo?'),
- 'L':N(820,700,230,80,'alerta','Alerta de stock<br>para el vendedor'),
- 'M':N(470,470,230,80,'inicio','Confirmación<br>con folio MT-00000'),
- 'N':N(170,470,230,80,'proc','Seguimiento con<br>folio + correo'),
+ 'A':N(95,105,150,70,'inicio','Cliente entra<br>sin cuenta'),
+ 'B':N(275,105,180,84,'proc','Ve el catálogo:<br>foto y al tocar, 3D'),
+ 'C':N(470,105,170,110,'rombo','¿Necesita<br>ayuda?'),
+ 'D':N(470,262,200,76,'proc','Asesor con Gemini<br>recomienda'),
+ 'E':N(650,105,150,76,'proc','Toca<br>"Agregar"'),
+ 'F':N(835,105,170,110,'rombo','¿Tiene<br>sesión?'),
+ 'G':N(835,268,230,96,'proc','Crea su cuenta o inicia<br>sesión y regresa con<br>el producto'),
+ 'H':N(1065,105,230,84,'proc','Carrito y pago: datos<br>de la cuenta + CP'),
+ 'J':N(1340,105,200,120,'rombo','¿Hay envío<br>a ese CP?'),
+ 'K':N(1340,262,250,84,'alerta','Aviso: no llegamos a<br>esa zona (mapa de zonas)'),
+ 'L':N(1440,430,250,92,'proc','Elige pago con Openpay:<br>tarjeta · SPEI · tienda'),
+ 'M':N(1160,430,240,92,'srv','Servidor: transacción<br>que bloquea productos'),
+ 'O2':N(880,430,200,120,'rombo','¿Alcanzan las<br>existencias?'),
+ 'V':N(880,572,270,76,'alerta','"Solo quedan X":<br>no se guarda nada'),
+ 'O':N(600,430,250,100,'srv','Crea pedido con folio,<br>descuenta y cobra<br>con Openpay'),
+ 'P':N(330,430,190,120,'rombo','¿Cobro<br>aceptado?'),
+ 'W':N(105,430,170,100,'alerta','Tarjeta rechazada:<br>se deshace<br>todo'),
+ 'Q':N(330,700,270,92,'proc','Pagado con tarjeta o<br>pendiente con referencia<br>SPEI / tienda'),
+ 'R':N(660,700,200,120,'rombo','¿Quedó en 0<br>o en el mínimo?'),
+ 'S':N(660,838,320,64,'alerta','Alerta y aviso al proveedor<br>por correo y WhatsApp'),
+ 'T':N(990,700,240,84,'inicio','Confirmación<br>con folio MT-00000'),
+ 'U':N(1340,700,280,84,'proc','Mis pedidos o<br>Rastrea tu pedido'),
 }
+for n in compra.values(): n['fs']=17 if n['forma']!='rombo' else 16
 ac=[
  dict(de='A',a='B'),dict(de='B',a='C'),
- dict(de='C',a='E',txt='No',en=(750,128)),
- dict(de='C',a='D',sale='b',entra='t',txt='Sí',en=(645,250)),
- dict(de='D',a='E',sale='r',entra=(840,185),por=[(840,330)]),
- dict(de='E',a='F'),dict(de='F',a='G'),
- dict(de='G',a='H',sale='b',entra='t'),
- dict(de='H',a='I',sale='t',entra='r',por=[(1430,330)],txt='No',en=(1340,310)),
- dict(de='I',a='E',sale='l',entra=(930,185),por=[(930,330)]),
- dict(de='H',a='J',sale='l',entra='r',txt='Sí',en=(1300,445)),
- dict(de='J',a='K',sale='l',entra='r'),
- dict(de='K',a='L',sale='b',entra='t',txt='Sí',en=(845,620)),
- dict(de='K',a='M',sale='l',entra='r',txt='No',en=(660,450)),
- dict(de='L',a='M',sale='l',entra='b',por=[(470,700)]),
- dict(de='M',a='N',sale='l',entra='r'),
+ dict(de='C',a='E',txt='No',en=(562,80)),
+ dict(de='C',a='D',sale='b',entra='t',txt='Sí',en=(495,190)),
+ dict(de='D',a='E',sale='r',entra='b',por=[(650,262)]),
+ dict(de='E',a='F'),
+ dict(de='F',a='H',txt='Sí',en=(950,82)),
+ dict(de='F',a='G',sale='b',entra='t',txt='No',en=(860,192)),
+ dict(de='G',a='H',sale='r',entra=(1000,147),por=[(1000,268)]),
+ dict(de='H',a='J'),
+ dict(de='J',a='K',sale='b',entra='t',txt='No',en=(1365,190)),
+ dict(de='K',a='H',sale='l',entra=(1130,147),por=[(1130,262)]),
+ dict(de='J',a='L',sale='r',entra=(1530,384),por=[(1530,105)],txt='Sí',en=(1530,82)),
+ dict(de='L',a='M',sale='l',entra='r'),
+ dict(de='M',a='O2',sale='l',entra='r'),
+ dict(de='O2',a='V',sale='b',entra='t',txt='No',en=(905,500)),
+ dict(de='O2',a='O',sale='l',entra='r',txt='Sí',en=(752,408)),
+ dict(de='O',a='P',sale='l',entra='r'),
+ dict(de='P',a='W',sale='l',entra='r',txt='No',en=(213,408)),
+ dict(de='P',a='Q',sale='b',entra='t',txt='Sí',en=(355,560)),
+ dict(de='Q',a='R',sale='r',entra='l'),
+ dict(de='R',a='S',sale='b',entra='t',txt='Sí',en=(685,778)),
+ dict(de='R',a='T',sale='r',entra='l',txt='No',en=(815,678)),
+ dict(de='S',a='T',sale='r',entra='b',por=[(990,838)]),
+ dict(de='T',a='U',sale='r',entra='l'),
 ]
 panel={
  'A':N(140,170,200,80,'inicio','Personal entra<br>al panel'),
@@ -105,9 +124,9 @@ ap=[
 async def main():
     async with async_playwright() as p:
         b=await p.chromium.launch(); pg=await b.new_page(viewport={'width':W,'height':H}, device_scale_factor=2)
-        for nombre,titulo,n,a,ley in [('flujo-compra','',compra,ac,'Rombo = decisión · Azul oscuro = proceso en el servidor · Rojo = aviso o alerta'),
-                                       ('flujo-panel','',panel,ap,'Administrador: todo el panel · Vendedor: pedidos y existencias')]:
-            await pg.set_content(generar(nombre,titulo,n,a,ley)); await pg.wait_for_timeout(200)
+        for nombre,titulo,n,a,ley,alto in [('flujo-compra','',compra,ac,'Rombo = decisión · Azul oscuro = proceso en el servidor · Rojo = aviso o alerta · Si algo falla dentro de la transacción, no se guarda nada',950),
+                                       ('flujo-panel','',panel,ap,'Administrador: todo el panel · Vendedor: pedidos y existencias',860)]:
+            await pg.set_viewport_size({'width':W,'height':alto}); await pg.set_content(generar(nombre,titulo,n,a,ley,alto)); await pg.wait_for_timeout(200)
             await pg.locator('#lienzo').screenshot(path=f'{nombre}.png'); print('ok',nombre)
         await b.close()
 asyncio.run(main())
