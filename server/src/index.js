@@ -4,6 +4,7 @@ dotenv.config({ quiet: true });
 const { crearApp } = await import('./app.js');
 const { pool } = await import('./db.js');
 const { migrar } = await import('./migraciones.js');
+const { sincronizarCuentas } = await import('./cuentas.js');
 
 if (!process.env.JWT_SECRET) {
   console.error('Falta JWT_SECRET en server/.env');
@@ -24,6 +25,16 @@ try {
 } catch (error) {
   console.error('No pude actualizar la estructura de la base de datos:', error.message);
   process.exit(1);
+}
+
+// Crea o actualiza las cuentas del panel con los correos y contraseñas de server/.env
+try {
+  for (const r of await sincronizarCuentas(pool)) {
+    if (r.estado === 'omitida') console.log(`Cuenta de ${r.rol} omitida: ${r.motivo}`);
+    else if (r.estado !== 'sin cambios') console.log(`Cuenta ${r.estado}: ${r.correo} (${r.rol})`);
+  }
+} catch (error) {
+  console.error('No pude crear las cuentas del panel:', error.message);
 }
 
 const port = Number(process.env.PORT || 3001);

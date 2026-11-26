@@ -22,6 +22,7 @@ if (!String(process.env.DB_NAME).endsWith('_test')) {
 
 const { pool } = await import('../src/db.js');
 const { crearApp } = await import('../src/app.js');
+const { sincronizarCuentas } = await import('../src/cuentas.js');
 
 let server;
 let base;
@@ -54,6 +55,23 @@ before(async () => {
 after(async () => {
   server?.close();
   await pool.end();
+});
+
+test('cuentas: el servidor crea y actualiza las cuentas del panel desde .env', async () => {
+  const env = { ADMIN_NAME: 'Admin Env', ADMIN_EMAIL: 'Env.Admin@Prueba.test', ADMIN_PASSWORD: 'primera-clave', SELLER_EMAIL: 'corta@prueba.test', SELLER_PASSWORD: '123' };
+  let r = await sincronizarCuentas(pool, env);
+  assert.equal(r[0].estado, 'creada');
+  assert.equal(r[1].estado, 'omitida');
+  const entrar = (password) => api('POST', '/api/auth/login', { body: { correo: 'env.admin@prueba.test', password } });
+  assert.equal((await entrar('primera-clave')).status, 200);
+
+  r = await sincronizarCuentas(pool, env);
+  assert.equal(r[0].estado, 'sin cambios');
+
+  r = await sincronizarCuentas(pool, { ...env, ADMIN_PASSWORD: 'segunda-clave' });
+  assert.equal(r[0].estado, 'actualizada');
+  assert.equal((await entrar('primera-clave')).status, 401);
+  assert.equal((await entrar('segunda-clave')).status, 200);
 });
 
 test('catálogo: lista productos activos, filtra y da piezas 3D', async () => {
