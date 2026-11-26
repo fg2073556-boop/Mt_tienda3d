@@ -47,6 +47,9 @@ before(async () => {
   await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await pool.query(await fs.readFile(new URL('../../database/schema.sql', import.meta.url), 'utf8'));
   await pool.query(await fs.readFile(new URL('../../database/seed.sql', import.meta.url), 'utf8'));
+  // Igual que al arrancar el servidor: migraciones (zonas de envío, códigos postales…)
+  const { migrar: migrarBase } = await import('../src/migraciones.js');
+  await migrarBase(pool);
   const hash = await bcrypt.hash('clave-de-prueba', 4);
   await pool.query(
     `INSERT INTO usuario (nombre, correo, password_hash, rol) VALUES ('Admin', 'admin@test.mx', $1, 'administrador'), ('Vende', 'vende@test.mx', $1, 'vendedor')`,
@@ -103,13 +106,15 @@ test('pago: crea pedido, descuenta stock y genera alerta de agotado', async () =
   const gpu = await idDe('tarjeta-de-video-rtx-4060-8-gb');
   const ram = await idDe('memoria-32-gb-ddr5-rgb-2x16');
   const r = await api('POST', '/api/pedidos', { body: {
-    cliente_nombre: 'Cliente de prueba', cliente_correo: 'cliente@ejemplo.com', direccion: 'Tepeaca, Puebla',
+    cliente_nombre: 'Cliente de prueba', cliente_correo: 'cliente@ejemplo.com', direccion: 'Av. Hidalgo 123',
+    envio_cp: '75200', envio_colonia: 'Tepeaca Centro',
     metodo_pago: 'tarjeta_prueba', items: [{ producto_id: gpu, cantidad: 2 }, { producto_id: ram, cantidad: 1 }],
   } });
   assert.equal(r.status, 201);
   assert.equal(r.body.folio, 'MT-00005');
   assert.equal(r.body.estado, 'pagado');
-  assert.equal(r.body.total, 6999 * 2 + 2199);
+  assert.equal(r.body.envio.costo, 49);
+  assert.equal(r.body.total, 6999 * 2 + 2199 + 49);
   assert.equal(await existencias('tarjeta-de-video-rtx-4060-8-gb'), 0);
   const alertas = await pool.query(`SELECT tipo FROM alerta_stock WHERE producto_id = $1`, [gpu]);
   assert.deepEqual(alertas.rows.map((a) => a.tipo), ['agotado']);
@@ -618,4 +623,73 @@ test('pagos: efectivo en tienda da referencia y la revisión automática detecta
     assert.equal(rev.status, 200);
     assert.equal(rev.body.estado, 'pagado');
   } finally { o.restaurar(); }
+});
+
+/* ---------- Envíos dentro de Puebla ---------- */
+test('envíos: cotiza por código postal, solo dentro de Puebla y en municipios con cobertura', async () => {
+  const tepeaca = (await api('GET', '/api/envios/cotizar?cp=75200')).body;
+  assert.equal(tepeaca.cubre, true);
+  assert.equal(tepeaca.municipio, 'Tepeaca');
+  assert.equal(tepeaca.zona.id, 1);
+  assert.equal(tepeaca.zona.costo, 49);
+  assert.ok(tepeaca.colonias.some((c) => c.nombre === 'Tepeaca Centro'));
+  assert.equal(tepeaca.ruta.origen, 'Tepeaca');
+
+  const xalapa = (await api('GET', '/api/envios/cotizar?cp=91000')).body;
+  assert.equal(xalapa.cubre, false);
+  assert.equal(xalapa.motivo, 'fuera_de_puebla');
+  assert.match(xalapa.mensaje, /Veracruz/);
+
+  assert.equal((await api('GET', '/api/envios/cotizar?cp=12')).body.motivo, 'cp_invalido');
+
+  const { rows: [lejos] } = await pool.query(
+    'SELECT c.cp, m.nombre FROM codigo_postal c JOIN municipio_envio m USING (cve_mun) WHERE m.zona_id IS NULL ORDER BY c.cp LIMIT 1');
+  const sin = (await api('GET', `/api/envios/cotizar?cp=${lejos.cp}`)).body;
+  assert.equal(sin.cubre, false);
+  assert.equal(sin.motivo, 'sin_cobertura');
+  assert.equal(sin.municipio, lejos.nombre);
+
+  const mapa = (await api('GET', '/api/envios/zonas')).body;
+  assert.equal(mapa.municipios.length, 217);
+  assert.equal(mapa.zonas.length, 3);
+  assert.equal(mapa.tienda.municipio, 'Tepeaca');
+});
+
+test('envíos: la compra cobra el envío y no deja comprar fuera de cobertura', async () => {
+  const id = await idDe('kit-3-ventiladores-rgb-120-mm');
+  const base = { cliente_nombre: 'Luis Pérez', cliente_correo: 'luis@ejemplo.com', direccion: 'Calle 2 Sur 10', metodo_pago: 'tienda', items: [{ producto_id: id, cantidad: 1 }] };
+  const antes = await existencias('kit-3-ventiladores-rgb-120-mm');
+
+  const fuera = await api('POST', '/api/pedidos', { body: { ...base, envio_cp: '91000', envio_colonia: 'Centro' } });
+  assert.equal(fuera.status, 422);
+  assert.match(fuera.body.error, /Puebla/);
+  assert.equal((await api('POST', '/api/pedidos', { body: { ...base, envio_cp: '75200', envio_colonia: 'Colonia inventada' } })).status, 422);
+  assert.equal((await api('POST', '/api/pedidos', { body: { ...base, envio_cp: '75200', envio_colonia: 'Tepeaca Centro', direccion: '' } })).status, 422);
+  assert.equal(await existencias('kit-3-ventiladores-rgb-120-mm'), antes);
+
+  const cdmx = (await api('GET', '/api/envios/cotizar?cp=72000')).body; // ciudad de Puebla
+  const ok = await api('POST', '/api/pedidos', { body: { ...base, envio_cp: '72000', envio_colonia: cdmx.colonias[0].nombre } });
+  assert.equal(ok.status, 201);
+  assert.equal(ok.body.envio.municipio, 'Puebla');
+  assert.equal(ok.body.total, 799 + cdmx.zona.costo);
+  const seg = await api('POST', '/api/pedidos/seguimiento', { body: { folio: ok.body.folio, correo: 'luis@ejemplo.com' } });
+  assert.equal(seg.body.envio_municipio, 'Puebla');
+  assert.equal(Number(seg.body.envio_costo), cdmx.zona.costo);
+});
+
+test('envíos: el administrador cambia costos y cobertura; el vendedor no', async () => {
+  const admin = await login('admin@test.mx');
+  const vendedor = await login('vende@test.mx');
+  assert.equal((await api('PUT', '/api/admin/envios/zonas/1', { token: vendedor, body: { costo: 0, dias_min: 1, dias_max: 1 } })).status, 403);
+
+  const z = await api('PUT', '/api/admin/envios/zonas/1', { token: admin, body: { costo: 0, dias_min: 1, dias_max: 1 } });
+  assert.equal(z.status, 200);
+  assert.equal((await api('GET', '/api/envios/cotizar?cp=75200')).body.zona.costo, 0, 'envío gratis en la zona local');
+  assert.equal((await api('PUT', '/api/admin/envios/zonas/1', { token: admin, body: { costo: 49, dias_min: 3, dias_max: 1 } })).status, 422);
+  await api('PUT', '/api/admin/envios/zonas/1', { token: admin, body: { costo: 49, dias_min: 1, dias_max: 2 } });
+
+  assert.equal((await api('PATCH', '/api/admin/envios/municipios/164', { token: admin, body: { zona_id: null } })).status, 200);
+  assert.equal((await api('GET', '/api/envios/cotizar?cp=75200')).body.motivo, 'sin_cobertura');
+  await api('PATCH', '/api/admin/envios/municipios/164', { token: admin, body: { zona_id: 1 } });
+  assert.equal((await api('GET', '/api/envios/cotizar?cp=75200')).body.cubre, true);
 });

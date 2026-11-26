@@ -3,6 +3,7 @@ import { query, transaction } from '../db.js';
 import { HttpError, handle } from '../errors.js';
 import { METODOS_CON_OPENPAY, METODOS_PAGO, METODOS_SIN_OPENPAY } from '../constants.js';
 import { crearCargo, ErrorPago, openpayListo } from '../services/openpay.js';
+import { cotizar, esDigital } from '../services/envios.js';
 import { fijarExistencias } from '../services/stock.js';
 import { email, int, oneOf, text } from '../validate.js';
 
@@ -34,7 +35,7 @@ router.post('/pedidos', limitarTarjeta, handle(async (req, res) => {
     cliente_nombre: text(b.cliente_nombre, 'nombre', { min: 3, max: 120 }),
     cliente_correo: email(b.cliente_correo),
     cliente_telefono: text(b.cliente_telefono, 'teléfono', { max: 20, required: false }),
-    direccion: text(b.direccion, 'dirección de entrega', { max: 500 }),
+    direccion: text(b.direccion, 'calle y número', { max: 500, required: false }),
     metodo_pago: oneOf(b.metodo_pago, 'forma de pago', openpayListo() ? METODOS_CON_OPENPAY : METODOS_SIN_OPENPAY),
   };
   // Datos que genera Openpay.js en el navegador (el token sustituye a la tarjeta)
@@ -55,7 +56,8 @@ router.post('/pedidos', limitarTarjeta, handle(async (req, res) => {
   const pedido = await transaction(async (client) => {
     // FOR UPDATE bloquea los productos para que dos compras al mismo tiempo no vendan lo mismo
     const { rows: productos } = await client.query(
-      `SELECT * FROM producto WHERE id = ANY($1) AND activo AND eliminado_en IS NULL ORDER BY id FOR UPDATE`,
+      `SELECT p.*, c.slug AS categoria_slug FROM producto p JOIN categoria c ON c.id = p.categoria_id
+       WHERE p.id = ANY($1) AND p.activo AND p.eliminado_en IS NULL ORDER BY p.id FOR UPDATE OF p`,
       [[...cantidades.keys()]],
     );
     const porId = new Map(productos.map((p) => [p.id, p]));
@@ -68,12 +70,27 @@ router.post('/pedidos', limitarTarjeta, handle(async (req, res) => {
       }
     }
 
+    // Envío: solo si hay algo físico (las licencias de software llegan por correo)
+    const conEnvio = [...cantidades.keys()].some((id) => !esDigital(porId.get(id).categoria_slug));
+    let envio = null;
+    if (conEnvio) {
+      if (!datos.direccion) throw new HttpError(422, 'Escribe la calle y el número para la entrega.');
+      const cotizacion = await cotizar(client, b.envio_cp);
+      if (!cotizacion.cubre) throw new HttpError(422, cotizacion.mensaje, { envio: cotizacion.motivo });
+      const colonia = text(b.envio_colonia, 'colonia', { max: 120 });
+      if (!cotizacion.colonias.some((c) => c.nombre === colonia)) throw new HttpError(422, 'Elige una colonia de la lista de tu código postal.');
+      envio = {
+        cp: cotizacion.cp, colonia, municipio: cotizacion.municipio, zona: cotizacion.zona.nombre, km: cotizacion.ruta.km_aprox,
+        dias: `${cotizacion.zona.dias_min}–${cotizacion.zona.dias_max}`, costo: cotizacion.zona.costo,
+      };
+    }
+
     // Simulado: la tarjeta de prueba queda pagada. Con Openpay: queda pagado cuando Openpay lo confirma
     let estado = datos.metodo_pago === 'tarjeta_prueba' ? 'pagado' : 'pendiente';
     const { rows: [nuevo] } = await client.query(
       `INSERT INTO pedido (cliente_nombre, cliente_correo, cliente_telefono, direccion, metodo_pago, estado)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [datos.cliente_nombre, datos.cliente_correo, datos.cliente_telefono, datos.direccion, datos.metodo_pago, estado],
+      [datos.cliente_nombre, datos.cliente_correo, datos.cliente_telefono, datos.direccion || 'Entrega digital por correo', datos.metodo_pago, estado],
     );
 
     let total = 0;
@@ -91,6 +108,14 @@ router.post('/pedidos', limitarTarjeta, handle(async (req, res) => {
       detalle.push({ producto_nombre: p.nombre, precio_unitario: p.precio, cantidad, subtotal });
     }
 
+    if (envio) {
+      total = Math.round((total + envio.costo) * 100) / 100;
+      await client.query(
+        `UPDATE pedido SET envio_cp = $2, envio_colonia = $3, envio_municipio = $4, envio_zona = $5, envio_km = $6, envio_dias = $7, envio_costo = $8
+         WHERE id = $1`,
+        [nuevo.id, envio.cp, envio.colonia, envio.municipio, envio.zona, envio.km, envio.dias, envio.costo],
+      );
+    }
     const folio = `MT-${String(nuevo.id).padStart(5, '0')}`;
     await client.query('UPDATE pedido SET folio = $1, total = $2 WHERE id = $3', [folio, total, nuevo.id]);
 
@@ -121,7 +146,7 @@ router.post('/pedidos', limitarTarjeta, handle(async (req, res) => {
       }
     }
 
-    return { folio, estado, total, metodo_pago: datos.metodo_pago, cliente_nombre: datos.cliente_nombre, detalle, pago };
+    return { folio, estado, total, metodo_pago: datos.metodo_pago, cliente_nombre: datos.cliente_nombre, detalle, pago, envio };
   });
 
   res.status(201).json(pedido);
@@ -147,7 +172,8 @@ router.post('/pedidos/seguimiento', limitar, handle(async (req, res) => {
   const folio = text(req.body.folio, 'folio', { max: 20 }).toUpperCase();
   const correo = email(req.body.correo);
   const { rows: [p] } = await query(
-    `SELECT id, folio, estado, total, metodo_pago, creado_en, actualizado_en, pago_estado, pago_datos
+    `SELECT id, folio, estado, total, metodo_pago, creado_en, actualizado_en, pago_estado, pago_datos,
+            envio_cp, envio_colonia, envio_municipio, envio_zona, envio_km, envio_dias, envio_costo
      FROM pedido WHERE folio = $1 AND lower(cliente_correo) = $2`,
     [folio, correo],
   );

@@ -12,6 +12,7 @@ import pedidosRoutes from './routes/pedidos.js';
 import iaRoutes from './routes/ia.js';
 import reposicionRoutes from './routes/reposicion.js';
 import pagosRoutes from './routes/pagos.js';
+import enviosRoutes from './routes/envios.js';
 import { HttpError } from './errors.js';
 
 const FOTOS_CATALOGO = fileURLToPath(new URL('../../assets/imagenes/productos', import.meta.url));
@@ -35,6 +36,7 @@ export function crearApp() {
   app.use('/api', pedidosRoutes);
   app.use('/api', asesorRoutes);
   app.use('/api', pagosRoutes);
+  app.use('/api', enviosRoutes);
   app.use('/api/admin/ia', iaRoutes);
   app.use('/api/admin/reposicion', reposicionRoutes);
   app.use('/api/admin', adminRoutes);
