@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import AvancePedido, { mensajeDeEstado } from '../components/AvancePedido.jsx';
 import DetalleEnvio, { envioDePedido } from '../components/DetalleEnvio.jsx';
 import InstruccionesPago from '../components/InstruccionesPago.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../lib/api.js';
 import { dinero, ESTADOS, fecha, METODOS_PAGO } from '../lib/formato.js';
-
-const PASOS = ['pagado', 'preparacion', 'enviado', 'entregado'];
 
 /** Los pedidos de la cuenta con sesión */
 export default function MisPedidos() {
@@ -35,7 +34,6 @@ export default function MisPedidos() {
         )}
         <div className="d-grid gap-3">
           {pedidos?.map((p) => {
-            const actual = p.estado === 'pendiente' ? -1 : PASOS.indexOf(p.estado);
             const abiertoAqui = abierto === p.folio;
             return (
               <article key={p.folio} className={`card mis-pedido ${abiertoAqui ? 'abierto' : ''}`}>
@@ -52,13 +50,10 @@ export default function MisPedidos() {
                 {abiertoAqui && (
                   <div className="card-body pt-0 d-grid gap-3">
                     {p.estado !== 'cancelado' && (
-                      <ol className="pasos" aria-label="Avance del pedido">
-                        {PASOS.map((paso, i) => (
-                          <li key={paso} className={i <= actual ? 'hecho' : ''} aria-current={i === actual ? 'step' : undefined}>
-                            {paso === 'pagado' && p.estado === 'pendiente' ? 'Pendiente de pago' : ESTADOS[paso]}
-                          </li>
-                        ))}
-                      </ol>
+                      <div className="rastreo-avance">
+                        <AvancePedido estado={p.estado} />
+                        <p className={`rastreo-mensaje ${p.estado === 'pendiente' ? 'espera' : ''}`}>{mensajeDeEstado(p.estado)}</p>
+                      </div>
                     )}
                     {p.estado !== 'cancelado' && p.pago_datos && (
                       <InstruccionesPago metodo={p.metodo_pago} estado={p.estado} total={p.total} pago={{ estado: p.pago_estado, datos: p.pago_datos }} />
