@@ -73,7 +73,7 @@ export default function Resumen() {
             </ul>
           </div>
           <div className="card card-body">
-            <h2 className="h5">Por reabastecer</h2>
+            <div className="d-flex justify-content-between align-items-center mb-2"><h2 className="h5 mb-0">Por reabastecer</h2><Link to="/panel/reposicion">Pedir reposición</Link></div>
             {!datos.stock_bajo.length && <p className="text-body-secondary mb-0">Todo el inventario está en niveles sanos.</p>}
             <ul className="list-unstyled mb-0">
               {datos.stock_bajo.map((p) => (
