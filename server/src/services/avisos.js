@@ -46,14 +46,20 @@ export const usarTransporte = (t) => { transportePrueba = t; };
 /** ¿Están los datos del servidor de correo en server/.env? */
 export const correoListo = () => Boolean(transportePrueba || (process.env.SMTP_USER && process.env.SMTP_PASS));
 
+// Las contraseñas de aplicación de Google se muestran con espacios ("abcd efgh ijkl mnop"):
+// se los quitamos por si se copiaron así, igual que comillas sobrantes.
+const limpiar = (v) => String(v ?? '').trim().replace(/^["']|["']$/g, '');
+export const usuarioSmtp = () => limpiar(process.env.SMTP_USER);
+export const claveSmtp = () => limpiar(process.env.SMTP_PASS).replace(/\s+/g, '');
+
 function transporte() {
   if (transportePrueba) return transportePrueba;
   const port = Number(process.env.SMTP_PORT || 587);
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    host: limpiar(process.env.SMTP_HOST) || 'smtp.gmail.com',
     port,
     secure: port === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    auth: { user: usuarioSmtp(), pass: claveSmtp() },
     connectionTimeout: 15000,
   });
 }
@@ -126,7 +132,7 @@ export function armarCorreo(productos, { titulo = 'Productos por reponer', nueva
 /** Manda un correo. Lanza un Error con mensaje en español si algo falla. */
 export async function enviarCorreo({ para, asunto, texto, html }) {
   if (!correoListo()) throw new Error('Falta configurar el correo: agrega SMTP_USER y SMTP_PASS en server/.env.');
-  const remitente = process.env.SMTP_USER || 'avisos@mt.local';
+  const remitente = usuarioSmtp() || 'avisos@mt.local';
   try {
     return await transporte().sendMail({
       from: { name: process.env.SMTP_REMITENTE || 'Avisos M&T', address: remitente },
@@ -137,7 +143,7 @@ export async function enviarCorreo({ para, asunto, texto, html }) {
     });
   } catch (error) {
     const msg = error.code === 'EAUTH'
-      ? 'El servidor de correo rechazó el usuario o la contraseña (en Gmail usa una contraseña de aplicación).'
+      ? `Gmail rechazó el acceso de ${usuarioSmtp()}: revisa que SMTP_USER sea la misma cuenta donde creaste la contraseña de aplicación y que SMTP_PASS tenga sus 16 letras.`
       : error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT' || error.code === 'ESOCKET'
         ? 'No se pudo conectar con el servidor de correo. Revisa SMTP_HOST, SMTP_PORT y tu internet.'
         : `No se pudo enviar el correo (${error.message}).`;
