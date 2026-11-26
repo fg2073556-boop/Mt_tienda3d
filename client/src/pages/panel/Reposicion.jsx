@@ -199,19 +199,25 @@ function Kpi({ tono, titulo, valor, nota }) {
   );
 }
 
+function canal({ activo, destino, listo, falta, error }) {
+  if (!activo) return { tono: 'apagado', texto: 'Apagado' };
+  if (!destino) return { tono: 'falta', texto: 'Falta el destino en Ajustes' };
+  if (!listo) return { tono: 'falta', texto: falta };
+  if (error) return { tono: 'falta', texto: error };
+  return { tono: 'ok', texto: 'Activo' };
+}
+
 function EstadoAviso({ estado, ajuste }) {
-  let tono = 'ok';
-  let texto = `Llega a ${ajuste.correo_destino}`;
-  if (!ajuste.aviso_automatico) { tono = 'apagado'; texto = 'Apagado en los ajustes'; }
-  else if (!ajuste.correo_destino) { tono = 'falta'; texto = 'Falta el correo de destino'; }
-  else if (!estado.correo) { tono = 'falta'; texto = 'Falta SMTP_USER y SMTP_PASS en server/.env'; }
-  else if (estado.ultimo_error) { tono = 'falta'; texto = estado.ultimo_error; }
+  const correo = canal({ activo: ajuste.aviso_automatico, destino: ajuste.correo_destino, listo: estado.correo, falta: 'Falta SMTP_USER y SMTP_PASS en server/.env', error: estado.ultimo_error });
+  const whats = canal({ activo: ajuste.whatsapp_automatico, destino: ajuste.proveedor_whatsapp, listo: estado.whatsapp, falta: estado.whatsapp_falta, error: estado.error_whatsapp });
+  const tono = correo.tono === 'ok' || whats.tono === 'ok' ? 'ok' : correo.tono === 'falta' || whats.tono === 'falta' ? 'falta' : 'apagado';
   return (
     <div className={`card card-body rep-kpi aviso-${tono}`}>
-      <span className="rep-kpi-titulo"><span className="rep-punto" />Aviso por correo</span>
-      <b className="rep-kpi-texto">{tono === 'ok' ? 'Activo' : tono === 'apagado' ? 'Apagado' : 'Sin configurar'}</b>
-      <span className="small text-body-secondary text-truncate" title={texto}>{texto}</span>
-      {tono === 'ok' && estado.ultimo_envio && <span className="small text-body-secondary">Último: {fecha(estado.ultimo_envio)}</span>}
+      <span className="rep-kpi-titulo"><span className="rep-punto" />Avisos automáticos</span>
+      <ul className="rep-canales">
+        <li className={correo.tono} title={correo.texto}><b>Correo</b><span>{correo.texto}</span></li>
+        <li className={whats.tono} title={whats.texto}><b>WhatsApp</b><span>{whats.texto}</span></li>
+      </ul>
     </div>
   );
 }
@@ -260,6 +266,14 @@ function PedidoProveedor({ elegidos, pedido, ajuste, estado, onQuitar, onLlego, 
       if (r.aviso) avisar(r.aviso, 'error');
     } catch (e) { avisar(e.message, 'error'); } finally { setCargando(false); }
   };
+  const [enviando, setEnviando] = useState(false);
+  const enviarDirecto = async () => {
+    setEnviando(true);
+    try {
+      await api('/admin/reposicion/whatsapp', { method: 'POST', body: { items: elegidos.map((p) => ({ id: p.id, cantidad: pedido[p.id] })), mensaje: borrador.mensaje } });
+      avisar(`Pedido enviado por WhatsApp a ${ajuste.proveedor_nombre || 'el proveedor'}`);
+    } catch (e) { avisar(e.message, 'error'); } finally { setEnviando(false); }
+  };
   const telefono = ajuste.proveedor_whatsapp;
   const url = borrador ? `https://wa.me/${telefono || ''}?text=${encodeURIComponent(borrador.mensaje)}` : null;
   const copiar = async () => {
@@ -306,9 +320,18 @@ function PedidoProveedor({ elegidos, pedido, ajuste, estado, onQuitar, onLlego, 
               </label>
               <textarea id="rep-mensaje" className="form-control rep-texto" rows={8} value={borrador.mensaje}
                 onChange={(e) => setBorrador({ ...borrador, mensaje: e.target.value })} />
-              <a className="btn btn-whats" href={url} target="_blank" rel="noopener noreferrer">
-                {telefono ? 'Abrir en WhatsApp' : 'Abrir WhatsApp y elegir contacto'}
-              </a>
+              {estado.whatsapp && telefono ? (
+                <>
+                  <button type="button" className="btn btn-whats" onClick={enviarDirecto} disabled={enviando}>
+                    {enviando ? <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true" />Enviando…</> : 'Enviar por WhatsApp ahora'}
+                  </button>
+                  <a className="small text-center" href={url} target="_blank" rel="noopener noreferrer">o abrirlo en WhatsApp y enviarlo yo</a>
+                </>
+              ) : (
+                <a className="btn btn-whats" href={url} target="_blank" rel="noopener noreferrer">
+                  {telefono ? 'Abrir en WhatsApp' : 'Abrir WhatsApp y elegir contacto'}
+                </a>
+              )}
               <div className="d-flex gap-2">
                 <button type="button" className="btn btn-outline-secondary btn-sm flex-fill" onClick={copiar}>Copiar</button>
                 <button type="button" className="btn btn-outline-secondary btn-sm flex-fill" onClick={() => redactar(true)} disabled={cargando}>{cargando ? 'Redactando…' : 'Otra versión'}</button>
@@ -360,12 +383,19 @@ function Ajustes({ ajuste, estado, editable, onGuardado }) {
         <label className="small fw-semibold">WhatsApp del proveedor
           <input className="form-control form-control-sm mt-1" inputMode="tel" placeholder="10 dígitos, p. ej. 2221234567" value={f.proveedor_whatsapp ?? ''} onChange={cambio('proveedor_whatsapp')} />
         </label>
+        <div className="form-check form-switch">
+          <input id="rep-whats-auto" className="form-check-input" type="checkbox" role="switch" checked={Boolean(f.whatsapp_automatico)} onChange={cambio('whatsapp_automatico')} />
+          <label className="form-check-label" htmlFor="rep-whats-auto">Pedirle por WhatsApp al proveedor cuando algo se acabe</label>
+        </div>
         {error && <div className="alert alert-danger py-2 small mb-0">{error}</div>}
         {editable && <button className="btn btn-dark btn-sm">{guardando ? 'Guardando…' : 'Guardar ajustes'}</button>}
       </fieldset>
       {!editable && <p className="small text-body-secondary mb-0 mt-2">Solo el administrador puede cambiar estos datos.</p>}
       {!estado.correo && (
         <p className="small rep-nota mb-0 mt-2">Para que salgan los correos, el servidor necesita <code>SMTP_USER</code> y <code>SMTP_PASS</code> en <code>server/.env</code>.</p>
+      )}
+      {!estado.whatsapp && (
+        <p className="small rep-nota mb-0 mt-2">Para el WhatsApp automático: {estado.whatsapp_falta} Mientras tanto, el pedido se abre en WhatsApp para que tú lo envíes.</p>
       )}
     </form>
   );
