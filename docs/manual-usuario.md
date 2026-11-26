@@ -50,7 +50,7 @@ Al comprar recibes un folio (por ejemplo `MT-00005`). En **Mi pedido** escribes 
 
 ![Login](capturas/09-login.png)
 
-Abre **Acceso para el personal** al final de la página o ve a `/login`.
+Da clic en **Iniciar sesión** (arriba a la derecha) y entra con tu cuenta del equipo: el mismo inicio de sesión de los clientes te lleva directo al panel.
 
 | Rol | Puede |
 |---|---|

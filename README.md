@@ -38,7 +38,7 @@ npm run bd                # si Docker no la tiene prendida
 npm run dev               # arranca la API y la tienda juntas
 ```
 
-Abre http://localhost:5173. El panel está en http://localhost:5173/login (las contraseñas están en `server/.env`).
+Abre http://localhost:5173. Arriba a la derecha está **Iniciar sesión**: el mismo inicio de sesión sirve para clientes y para el equipo (las cuentas de administrador y vendedor están en `server/.env`; el personal entra directo al panel).
 
 ### Comandos útiles
 
@@ -85,10 +85,15 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 
 ## Roles
 
-| Rol | Puede |
-|---|---|
-| Administrador | Todo: alta, edición y baja de productos, existencias, pedidos y alertas |
-| Vendedor | Ver el resumen, ajustar existencias y cambiar el estado de los pedidos |
+Cualquiera puede ver la tienda, el showroom 3D, las fichas y las zonas de envío **sin cuenta**. Al tocar **Agregar** sin sesión, la tienda manda a **Crear cuenta** y, al terminar, regresa a la misma página con el producto ya en el carrito. Hay **un solo inicio de sesión** (`/ingresar`) para todos: según el rol, la cuenta entra a la tienda o al panel.
+
+| Rol | Cómo se crea | Puede |
+|---|---|---|
+| Cliente | Se registra solo en *Crear cuenta* | Comprar, ver **Mis pedidos** (estado, envío y referencias de pago) |
+| Vendedor | `server/.env` (`SELLER_*`) | Panel: resumen, existencias, pedidos, reposición |
+| Administrador | `server/.env` (`ADMIN_*`) | Todo: productos, envíos, ajustes de avisos, IA |
+
+Nadie puede registrarse como personal. Seguridad: contraseñas con bcrypt, máximo 10 contraseñas equivocadas cada 15 minutos y 5 cuentas nuevas por hora por conexión, la sesión del cliente dura 7 días y la del personal 8 horas, y al cerrar sesión se vacía el carrito.
 
 ## API
 
@@ -97,7 +102,7 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 | `GET /api/productos?categoria=&q=` | Público | Catálogo con filtros |
 | `GET /api/productos/:slug` | Público | Ficha de un producto |
 | `GET /api/piezas` | Público | Producto de cada pieza de la escena 3D |
-| `POST /api/pedidos` | Público | Compra todo-o-nada; descuenta existencias |
+| `POST /api/pedidos` | Con sesión | Compra todo-o-nada; descuenta existencias |
 | `POST /api/asesor` | Público | Recomendación con Gemini (o reglas sin llave) |
 | `POST /api/pedidos/seguimiento` | Público | Estado del pedido con folio y correo |
 | `GET /api/envios/cotizar?cp=` | Público | Municipio, colonias, zona, costo, días y ruta |
@@ -105,7 +110,9 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 | `PUT /api/admin/envios/zonas/:id` · `PATCH /api/admin/envios/municipios/:cve` | Administrador | Costo y días por zona; zona de cada municipio |
 | `GET /api/pagos/config` | Público | Si hay Openpay y su llave pública |
 | `POST /api/pagos/openpay/webhook` | Openpay | Avisa pagos; se confirman consultando a Openpay |
-| `POST /api/auth/login` | Público | Devuelve el token JWT |
+| `POST /api/auth/registro` | Público | Crea una cuenta de cliente y devuelve el token |
+| `POST /api/auth/login` | Público | Mismo inicio de sesión para clientes y personal; devuelve el token JWT |
+| `GET /api/mis-pedidos` | Con sesión | Los pedidos de la cuenta |
 | `GET /api/admin/resumen` | Ambos roles | Ventas del día, pedidos, alertas |
 | `POST/PUT/DELETE /api/admin/productos` | Administrador | Alta, edición (con foto y .glb) y baja |
 | `PATCH /api/admin/productos/:id/existencias` | Ambos roles | Sumar o restar existencias |
@@ -225,7 +232,7 @@ cd server
 DB_NAME=mt_tienda_test npm test              # PowerShell: $env:DB_NAME="mt_tienda_test"; npm test
 ```
 
-Son 31 pruebas: cuentas, catálogo, compra, stock, roles, pedidos, seguimiento, IA, reposición, WhatsApp, fotos, pagos con Openpay y envíos. Gemini, el correo, WhatsApp y Openpay se simulan en las pruebas, así que no gastan cuota ni mandan correos.
+Son 33 pruebas: cuentas, catálogo, compra, stock, roles, pedidos, seguimiento, IA, reposición, WhatsApp, fotos, pagos con Openpay, envíos y cuentas de clientes. Gemini, el correo, WhatsApp y Openpay se simulan en las pruebas, así que no gastan cuota ni mandan correos.
 
 ## Usar la IA (Gemini)
 
