@@ -125,6 +125,9 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 
 ## Modelos 3D
 
+**Fotos del catálogo:** las fotos de los productos viven en `assets/imagenes/productos/<slug>.webp` y se asignan solas al arrancar el servidor (una sola vez, sin pisar fotos subidas desde el panel). En el catálogo y en la ficha, la **foto es la vista principal**; al tocarla se abre el **modelo 3D girando** (en el catálogo, en una ventana con "Ver detalles" y "Agregar").
+
+
 **Piezas hechas con código (recomendado).** Cada producto puede tener un *modelo 3D hecho con código* (three.js, sin archivos ni programas de pago): se elige en el panel al editar el producto. Se ve en tres lugares:
 
 - **Catálogo:** la tarjeta muestra la imagen 3D de la pieza (si el producto no tiene foto).
