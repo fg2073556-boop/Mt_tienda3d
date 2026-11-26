@@ -28,7 +28,7 @@ Necesitas **Docker Desktop** (abierto), **Node.js 20+** y **Git**.
 npm run instalar          # instala todo (raíz, server y client)
 npm run preparar          # crea los .env con contraseñas aleatorias y te muestra las del panel
 npm run bd                # levanta PostgreSQL en Docker y carga el catálogo de ejemplo
-npm run crear-usuarios    # crea las cuentas de administrador y vendedor
+npm run crear-usuarios    # opcional: el servidor ya crea las cuentas de server/.env al arrancar
 ```
 
 **Cada vez que vayas a trabajar:**
@@ -47,7 +47,7 @@ Abre http://localhost:5173. El panel está en http://localhost:5173/login (las c
 | `npm run dev` | Arranca API (puerto 3001) y tienda (puerto 5173) en una sola terminal |
 | `npm run migrar` | Agrega a una base que ya existía las columnas nuevas (modelo 3D y especificaciones). Se puede repetir |
 | `npm run importar-catalogo` | Carga `datos/catalogo.csv` a la base (agrega `-- --prueba` para solo ver los cambios) |
-| `npm run crear-usuarios` | Crea o actualiza las cuentas del panel con los datos de `server/.env` |
+| `npm run crear-usuarios` | Crea o actualiza las cuentas del panel con los datos de `server/.env` (el servidor también lo hace solo al arrancar o al guardar `server/.env`) |
 | `npm test` | Corre las pruebas de la API (ver sección Pruebas) |
 | `npm run bd:detener` | Apaga la base de datos de Docker |
 
