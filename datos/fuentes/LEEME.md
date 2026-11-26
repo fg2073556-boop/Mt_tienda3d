@@ -9,7 +9,7 @@
 
 - `database/migraciones/008-envios.sql`: zonas de envío y municipios con su distancia a la tienda (Tepeaca).
 - `database/migraciones/009-codigos-postales-puebla.sql`: 6,401 colonias y 1,566 códigos postales de Puebla.
-- `client/public/mapas/puebla-municipios.json`: mapa simplificado (26 KB) para dibujar las zonas.
+- `client/public/mapas/puebla-municipios.json`: mapa simplificado (~170 KB) para dibujar las zonas.
 
 Para regenerarlos (por ejemplo, si cambian las distancias de las zonas):
 

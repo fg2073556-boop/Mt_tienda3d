@@ -22,7 +22,7 @@ ZONAS = [                # (id, nombre, km máximo, costo, días mín, días má
     (2, 'Zona 2 · Regional', 80, 89, 2, 3, '#36b37e'),
     (3, 'Zona 3 · Estatal', 120, 129, 3, 5, '#e0a21e'),
 ]
-TOLERANCIA = 0.0025      # grados (~250 m) para simplificar el mapa
+TOLERANCIA = 0.004       # grados (~400 m) para simplificar el mapa
 
 
 def anillos(geom):
@@ -54,9 +54,18 @@ def km(a, b):
     return 6371 * 2 * math.asin(math.sqrt(h))
 
 
+def simplificar_anillo(puntos, tol):
+    """Un anillo cerrado empieza y termina en el mismo punto: se parte en dos en su punto más lejano"""
+    if len(puntos) < 5:
+        return puntos
+    x0, y0 = puntos[0]
+    lejos = max(range(1, len(puntos) - 1), key=lambda i: (puntos[i][0] - x0) ** 2 + (puntos[i][1] - y0) ** 2)
+    return simplificar(puntos[:lejos + 1], tol)[:-1] + simplificar(puntos[lejos:], tol)
+
+
 def simplificar(puntos, tol):
     """Douglas-Peucker"""
-    if len(puntos) < 4:
+    if len(puntos) < 3:
         return puntos
     (x1, y1), (x2, y2) = puntos[0], puntos[-1]
     dx, dy = x2 - x1, y2 - y1
@@ -168,7 +177,7 @@ ON CONFLICT DO NOTHING;
         for poly in anillos(m['geom']):
             rings = []
             for ring in poly:
-                s = simplificar([(round(x, 4), round(y, 4)) for x, y in ring], TOLERANCIA)
+                s = simplificar_anillo([(round(x, 4), round(y, 4)) for x, y in ring], TOLERANCIA)
                 if len(s) >= 4:
                     rings.append([list(p) for p in s])
             if rings:
