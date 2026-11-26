@@ -1,4 +1,5 @@
 import { PIEZAS } from '../constants.js';
+import { especificaciones, modeloCodigo } from '../validate.js';
 
 /**
  * Lee un CSV (separado por comas, con comillas para textos que llevan comas)
@@ -52,6 +53,15 @@ export function validarFila(f) {
   const pieza = f.pieza_3d || null;
   if (pieza && !PIEZAS[pieza]) throw new Error(`"${nombre}": pieza_3d "${pieza}" no existe (usa: ${Object.keys(PIEZAS).join(', ')})`);
 
+  let modelo, specs;
+  try {
+    modelo = modeloCodigo(f.modelo_codigo);
+    // en el CSV las especificaciones van en una celda: "Dato: valor | Dato: valor"
+    specs = especificaciones((f.especificaciones || '').split('|').join('\n'));
+  } catch (e) {
+    throw new Error(`"${nombre}": ${e.message}`);
+  }
+
   return {
     nombre,
     categoria: f.categoria,
@@ -61,5 +71,7 @@ export function validarFila(f) {
     pieza_3d: pieza,
     descripcion: f.descripcion || null,
     imagen: f.imagen || null,
+    modelo_codigo: modelo,
+    especificaciones: specs,
   };
 }

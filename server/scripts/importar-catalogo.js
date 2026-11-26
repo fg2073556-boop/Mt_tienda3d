@@ -5,7 +5,8 @@
  *   npm run importar-catalogo -- --prueba  → solo muestra qué cambiaría
  *   npm run importar-catalogo -- ruta/otro.csv
  *
- * Columnas: nombre, categoria, precio_mxn, existencias, pieza_3d, descripcion, imagen, stock_minimo
+ * Columnas: nombre, categoria, precio_mxn, existencias, pieza_3d, descripcion, imagen, stock_minimo,
+ *           modelo_codigo (modelo 3D hecho con código), especificaciones ("Dato: valor | Dato: valor")
  * - Cada producto se identifica por su nombre: si ya existe se actualiza, si no se crea.
  * - Las categorías nuevas se crean solas.
  * - "imagen" es el nombre de un archivo dentro de assets/imagenes/productos/ (opcional).
@@ -79,9 +80,9 @@ try {
           let slugLibre = slug;
           for (let i = 2; (await client.query('SELECT 1 FROM producto WHERE slug = $1', [slugLibre])).rowCount; i++) slugLibre = `${slug}-${i}`;
           await client.query(
-            `INSERT INTO producto (categoria_id, nombre, slug, descripcion, precio, existencias, stock_minimo, pieza_3d, imagen)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-            [cat.id, p.nombre, slugLibre, p.descripcion, p.precio, p.existencias, p.stock_minimo, p.pieza_3d, imagen],
+            `INSERT INTO producto (categoria_id, nombre, slug, descripcion, precio, existencias, stock_minimo, pieza_3d, imagen, modelo_codigo, especificaciones)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+            [cat.id, p.nombre, slugLibre, p.descripcion, p.precio, p.existencias, p.stock_minimo, p.pieza_3d, imagen, p.modelo_codigo, JSON.stringify(p.especificaciones)],
           );
           r.creados.push(p.nombre);
           continue;
@@ -89,13 +90,15 @@ try {
 
         const cambia = actual.categoria_id !== cat.id || actual.descripcion !== p.descripcion || actual.precio !== p.precio
           || actual.existencias !== p.existencias || actual.stock_minimo !== p.stock_minimo || actual.pieza_3d !== p.pieza_3d
+          || actual.modelo_codigo !== p.modelo_codigo || JSON.stringify(actual.especificaciones) !== JSON.stringify(p.especificaciones)
           || (imagen && actual.imagen !== imagen) || actual.eliminado_en;
         if (!cambia) { r.sinCambio++; continue; }
 
         await client.query(
           `UPDATE producto SET categoria_id=$1, nombre=$2, descripcion=$3, precio=$4, stock_minimo=$5, pieza_3d=$6,
-                  imagen=COALESCE($7, imagen), activo=TRUE, eliminado_en=NULL, actualizado_en=NOW() WHERE id=$8`,
-          [cat.id, p.nombre, p.descripcion, p.precio, p.stock_minimo, p.pieza_3d, imagen, actual.id],
+                  imagen=COALESCE($7, imagen), modelo_codigo=$8, especificaciones=$9, activo=TRUE, eliminado_en=NULL, actualizado_en=NOW()
+           WHERE id=$10`,
+          [cat.id, p.nombre, p.descripcion, p.precio, p.stock_minimo, p.pieza_3d, imagen, p.modelo_codigo, JSON.stringify(p.especificaciones), actual.id],
         );
         await fijarExistencias(client, { ...actual, stock_minimo: p.stock_minimo }, p.existencias);
         r.actualizados.push(p.nombre);

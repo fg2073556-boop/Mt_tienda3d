@@ -4,6 +4,7 @@ import { dinero } from '../lib/formato.js';
 import { useAviso } from './Aviso.jsx';
 import Icono from './Icono.jsx';
 import Insignia from './Insignia.jsx';
+import Miniatura3D from './Miniatura3D.jsx';
 
 export default function TarjetaProducto({ producto, onVer3D }) {
   const { agregar } = useCart();
@@ -18,7 +19,9 @@ export default function TarjetaProducto({ producto, onVer3D }) {
   return (
     <article className="card tarjeta h-100">
       <Link to={`/producto/${producto.slug}`} className="miniatura" tabIndex={-1} aria-hidden="true">
-        {producto.imagen_url ? <img src={producto.imagen_url} alt="" loading="lazy" /> : <Icono producto={producto} />}
+        {producto.imagen_url ? <img src={producto.imagen_url} alt="" loading="lazy" />
+          : producto.modelo_codigo ? <Miniatura3D codigo={producto.modelo_codigo} alt="" respaldo={<Icono producto={producto} />} />
+            : <Icono producto={producto} />}
       </Link>
       <div className="card-body d-flex flex-column gap-1">
         <span className="small text-body-secondary">{producto.categoria.nombre}</span>

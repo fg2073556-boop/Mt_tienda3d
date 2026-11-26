@@ -9,7 +9,7 @@ import { HttpError, handle } from '../errors.js';
 import { ESTADOS, ESTADOS_ABIERTOS, METODOS_PAGO, PIEZAS } from '../constants.js';
 import { permitir, requiereSesion } from '../middleware/auth.js';
 import { fijarExistencias } from '../services/stock.js';
-import { bool, int, money, oneOf, slugify, text } from '../validate.js';
+import { bool, especificaciones, int, modeloCodigo, money, oneOf, slugify, text } from '../validate.js';
 import { SELECT_PRODUCTO, conUrls } from './catalogo.js';
 
 export const UPLOADS = fileURLToPath(new URL('../../uploads', import.meta.url));
@@ -93,6 +93,8 @@ function leerProducto(body) {
     existencias: int(body.existencias, 'existencias', { min: 0, max: 100000 }),
     stock_minimo: int(body.stock_minimo ?? 2, 'aviso de stock bajo', { min: 0, max: 1000 }),
     pieza_3d: body.pieza_3d ? oneOf(body.pieza_3d, 'pieza 3D', Object.keys(PIEZAS)) : null,
+    modelo_codigo: modeloCodigo(body.modelo_codigo),
+    especificaciones: especificaciones(body.especificaciones),
     activo: bool(body.activo),
   };
 }
@@ -116,9 +118,11 @@ router.post('/productos', soloAdmin, conSubida, handle(async (req, res) => {
     const producto = await transaction(async (client) => {
       const slug = await slugUnico(client, d.nombre);
       const { rows } = await client.query(
-        `INSERT INTO producto (categoria_id, nombre, slug, descripcion, precio, existencias, stock_minimo, pieza_3d, activo, imagen, modelo_3d)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-        [d.categoria_id, d.nombre, slug, d.descripcion, d.precio, d.existencias, d.stock_minimo, d.pieza_3d, d.activo, archivos.imagen, archivos.modelo],
+        `INSERT INTO producto (categoria_id, nombre, slug, descripcion, precio, existencias, stock_minimo, pieza_3d, activo, imagen, modelo_3d,
+                               modelo_codigo, especificaciones)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+        [d.categoria_id, d.nombre, slug, d.descripcion, d.precio, d.existencias, d.stock_minimo, d.pieza_3d, d.activo, archivos.imagen, archivos.modelo,
+          d.modelo_codigo, JSON.stringify(d.especificaciones)],
       );
       return rows[0];
     });
@@ -150,8 +154,9 @@ router.put('/productos/:id', soloAdmin, conSubida, handle(async (req, res) => {
       const slug = d.nombre === actual.nombre ? actual.slug : await slugUnico(client, d.nombre, id);
       await client.query(
         `UPDATE producto SET categoria_id=$1, nombre=$2, slug=$3, descripcion=$4, precio=$5, stock_minimo=$6,
-                pieza_3d=$7, activo=$8, imagen=$9, modelo_3d=$10, actualizado_en=NOW() WHERE id=$11`,
-        [d.categoria_id, d.nombre, slug, d.descripcion, d.precio, d.stock_minimo, d.pieza_3d, d.activo, imagen, modelo, id],
+                pieza_3d=$7, activo=$8, imagen=$9, modelo_3d=$10, modelo_codigo=$11, especificaciones=$12, actualizado_en=NOW() WHERE id=$13`,
+        [d.categoria_id, d.nombre, slug, d.descripcion, d.precio, d.stock_minimo, d.pieza_3d, d.activo, imagen, modelo,
+          d.modelo_codigo, JSON.stringify(d.especificaciones), id],
       );
       // Las existencias pasan por el servicio para que se generen las alertas
       await fijarExistencias(client, { ...actual, stock_minimo: d.stock_minimo }, d.existencias);

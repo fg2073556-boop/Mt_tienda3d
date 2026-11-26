@@ -13,6 +13,7 @@ Tecnologías: **React + Bootstrap**, **Node.js + Express** (API REST con JWT) y 
 | Gestión de stock | Existencias y aviso cuando un producto se agota | Listo y probado |
 | Panel del vendedor | Ver pedidos y cambiar su estado | Listo y probado |
 | Extra: vista 3D | Escena con la PC desarmable; acepta modelos .glb | Listo y probado |
+| Extra: piezas 3D realistas | 37 modelos hechos con código (CPU, RAM, tarjetas madre, GPU, SSD, fuentes, PCs, mobiliario, software) en catálogo, ficha y galería | Listo |
 | Extra: asesor con Gemini | Recomienda equipo según el uso del cliente | Listo (necesita llave de API) |
 | Extra: IA en el panel | Redacta descripciones y resume fichas técnicas en PDF | Listo (necesita llave de API) |
 | Extra: seguimiento | El cliente consulta su pedido con folio y correo | Listo y probado |
@@ -44,6 +45,7 @@ Abre http://localhost:5173. El panel está en http://localhost:5173/login (las c
 | Comando | Qué hace |
 |---|---|
 | `npm run dev` | Arranca API (puerto 3001) y tienda (puerto 5173) en una sola terminal |
+| `npm run migrar` | Agrega a una base que ya existía las columnas nuevas (modelo 3D y especificaciones). Se puede repetir |
 | `npm run importar-catalogo` | Carga `datos/catalogo.csv` a la base (agrega `-- --prueba` para solo ver los cambios) |
 | `npm run crear-usuarios` | Crea o actualiza las cuentas del panel con los datos de `server/.env` |
 | `npm test` | Corre las pruebas de la API (ver sección Pruebas) |
@@ -115,7 +117,15 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 
 ## Modelos 3D
 
-En el panel, edita un producto, elige su **pieza en la escena 3D** y sube su `.glb`. La escena reemplaza la pieza dibujada por ese modelo, y la ficha del producto lo muestra con realidad aumentada en celulares compatibles. Para el gabinete sube el modelo **vacío por dentro**. Los prompts para generarlos están en `docs/prompts-3d.md`.
+**Piezas hechas con código (recomendado).** Cada producto puede tener un *modelo 3D hecho con código* (three.js, sin archivos ni programas de pago): se elige en el panel al editar el producto. Se ve en tres lugares:
+
+- **Catálogo:** la tarjeta muestra la imagen 3D de la pieza (si el producto no tiene foto).
+- **Ficha del producto:** visor para girar, acercar y desarmar la pieza, con su tabla de especificaciones.
+- **Galería:** http://localhost:5173/galeria-3d muestra todas las piezas (botón *Piezas 3D* de la barra).
+
+Cómo están hechas y cómo agregar una nueva: [docs/modelos-3d.md](docs/modelos-3d.md).
+
+**Modelos .glb.** En el panel, edita un producto, elige su **pieza en la escena 3D** y sube su `.glb`. La escena reemplaza la pieza dibujada por ese modelo, y la ficha del producto lo muestra con realidad aumentada en celulares compatibles. Para el gabinete sube el modelo **vacío por dentro**. Los prompts para generarlos están en `docs/prompts-3d.md`.
 
 ## Pruebas
 
@@ -153,12 +163,23 @@ npm run importar-catalogo                # lo aplica
 
 Los productos se reconocen por nombre: si existe se actualiza, si no se crea. Nada se borra.
 
+Columnas opcionales: `modelo_codigo` (el código del modelo 3D, por ejemplo `gpu-rtx-5060-ti`; la lista está en `client/src/modelos3d/lista.js`) y `especificaciones`, en una sola celda separadas por barras: `Socket: AM5 | TDP: 65 W`.
+
+**Si ya tenías la base de datos de antes**, actualízala así (no borra nada):
+
+```bash
+npm run migrar               # agrega las columnas nuevas
+npm run importar-catalogo    # carga los 17 productos nuevos y las especificaciones
+```
+
+> Ojo: importar el CSV también deja las existencias como dice el CSV.
+
 ## Equipo y responsabilidades
 
 | Rol | Responsable | Entregables |
 |---|---|---|
 | Líder técnico y desarrollo | Fernando González Méndez | Código, revisión de cambios |
-| Responsable 3D | Por asignar | Modelos `.glb` de cada pieza, subidos desde el panel |
+| Responsable 3D | Por asignar | Piezas 3D con código ([docs/modelos-3d.md](docs/modelos-3d.md)) y modelos `.glb` opcionales |
 | Responsable de catálogo | Por asignar | `datos/catalogo.csv` completo, fotos y descripciones |
 | Diseño y marca | Por asignar | Logo, banners, presentación |
 | Pruebas y documentación | Por asignar | `docs/pruebas.md`, manual de usuario, reporte de errores |
@@ -174,4 +195,5 @@ Lee [CONTRIBUTING.md](CONTRIBUTING.md) antes de subir tu primer cambio.
 | [docs/guion-demo.md](docs/guion-demo.md) | Demo de 3 minutos, plan B y preguntas de los jueces |
 | [docs/pruebas.md](docs/pruebas.md) | Lista de pruebas manuales |
 | [docs/tareas-equipo.md](docs/tareas-equipo.md) | Tareas por rol, listas para convertir en issues |
+| [docs/modelos-3d.md](docs/modelos-3d.md) | Cómo están hechas las piezas 3D con código y cómo agregar una |
 | [docs/prompts-3d.md](docs/prompts-3d.md) | Prompts para generar las piezas 3D |

@@ -33,6 +33,10 @@ CREATE TABLE producto (
     modelo_3d       VARCHAR(255),           -- archivo .glb dentro de /uploads
     -- Pieza de la escena 3D: gab, cpu, cooler, ram, gpu, ssd, psu, fans, monitor, kb, desk
     pieza_3d        VARCHAR(20),
+    -- Modelo 3D hecho con código (client/src/modelos3d), p. ej. 'gpu-rtx-5060-ti'
+    modelo_codigo   VARCHAR(40),
+    -- Ficha técnica: lista de pares ["Dato", "Valor"]
+    especificaciones JSONB        NOT NULL DEFAULT '[]'::jsonb,
     activo          BOOLEAN       NOT NULL DEFAULT TRUE,
     eliminado_en    TIMESTAMPTZ,            -- borrado suave: los pedidos viejos lo conservan
     creado_en       TIMESTAMPTZ   NOT NULL DEFAULT NOW(),

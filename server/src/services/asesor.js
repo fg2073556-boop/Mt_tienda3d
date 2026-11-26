@@ -7,7 +7,7 @@ import { iaActiva, pedirJson } from './gemini.js';
  */
 export async function recomendar(necesidad) {
   const { rows: catalogo } = await query(`
-    SELECT p.id, p.nombre, p.slug, p.precio, p.existencias, p.pieza_3d, c.nombre AS categoria
+    SELECT p.id, p.nombre, p.slug, p.precio, p.existencias, p.pieza_3d, p.especificaciones, c.nombre AS categoria
     FROM producto p JOIN categoria c ON c.id = p.categoria_id
     WHERE p.activo AND p.eliminado_en IS NULL AND p.existencias > 0
     ORDER BY p.precio`);
@@ -24,14 +24,15 @@ export async function recomendar(necesidad) {
 
 async function preguntarAGemini(necesidad, catalogo) {
   const lista = catalogo
-    .map((p) => `${p.id} | ${p.nombre} | ${p.categoria} | $${Math.round(p.precio)} MXN | ${p.existencias} en existencia`)
+    .map((p) => `${p.id} | ${p.nombre} | ${p.categoria} | $${Math.round(p.precio)} MXN | ${p.existencias} en existencia | ${(p.especificaciones || []).slice(0, 4).map(([k, v]) => `${k}: ${v}`).join('; ')}`)
     .join('\n');
 
   const json = await pedirJson([{ text: `Eres el asesor de ventas de M&T, una tienda de soluciones integrales de PC en Tepeaca, Puebla.
 El cliente dice: "${necesidad}"
 
 Recomienda una solución completa (equipo, software y mobiliario si aplica) usando SOLO productos de esta lista.
-Formato de cada renglón: id | nombre | categoría | precio | existencias
+Formato de cada renglón: id | nombre | categoría | precio | existencias | especificaciones
+Si recomiendas piezas sueltas, cuida que sean compatibles (socket del procesador con la tarjeta madre, DDR4 o DDR5).
 ${lista}
 
 Responde solo con JSON con esta forma:

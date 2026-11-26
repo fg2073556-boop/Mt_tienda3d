@@ -9,7 +9,8 @@
     "start": "node src/index.js",
     "crear-usuarios": "node scripts/crear-usuarios.js",
     "test": "node --test",
-    "importar-catalogo": "node scripts/importar-catalogo.js"
+    "importar-catalogo": "node scripts/importar-catalogo.js",
+    "migrar": "node scripts/migrar.js"
   },
   "engines": {
     "node": ">=20"

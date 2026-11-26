@@ -59,7 +59,7 @@ after(async () => {
 test('catálogo: lista productos activos, filtra y da piezas 3D', async () => {
   const todos = await api('GET', '/api/productos');
   assert.equal(todos.status, 200);
-  assert.equal(todos.body.length, 17);
+  assert.equal(todos.body.length, 34);
   const comp = await api('GET', '/api/productos?categoria=componentes');
   assert.ok(comp.body.every((p) => p.categoria.slug === 'componentes'));
   const piezas = await api('GET', '/api/piezas');
@@ -123,6 +123,38 @@ test('panel: alta, edición con alerta de stock bajo y baja de producto', async 
 
   assert.equal((await api('DELETE', `/api/admin/productos/${nuevo.id}`, { token: admin })).status, 204);
   assert.equal((await api('GET', '/api/productos/mouse-inalambrico')).status, 404);
+});
+
+test('modelos 3D: el catálogo trae modelo y ficha técnica; el panel los valida', async () => {
+  const gpu = await api('GET', '/api/productos/tarjeta-de-video-nvidia-geforce-rtx-5060-ti-16-gb');
+  assert.equal(gpu.status, 200);
+  assert.equal(gpu.body.modelo_codigo, 'gpu-rtx-5060-ti');
+  assert.deepEqual(gpu.body.especificaciones[0], ['Núcleos CUDA', '4,608']);
+
+  const admin = await login('admin@test.mx');
+  const enviar = (campos) => {
+    const form = new FormData();
+    Object.entries({ nombre: 'Gabinete de prueba', categoria_id: '1', precio: '999', existencias: '3', activo: 'true', ...campos }).forEach(([k, v]) => form.append(k, v));
+    return fetch(`${base}/api/admin/productos`, { method: 'POST', headers: { Authorization: `Bearer ${admin}` }, body: form });
+  };
+  const ok = await enviar({ modelo_codigo: 'pc-gamer-fenix', especificaciones: 'Formato: ATX\nVidrio: Templado' });
+  assert.equal(ok.status, 201);
+  const creado = await ok.json();
+  assert.equal(creado.modelo_codigo, 'pc-gamer-fenix');
+  assert.deepEqual(creado.especificaciones, [['Formato', 'ATX'], ['Vidrio', 'Templado']]);
+
+  assert.equal((await enviar({ modelo_codigo: '../hack' })).status, 422);
+  assert.equal((await enviar({ especificaciones: 'renglón sin dos puntos' })).status, 422);
+  assert.equal((await enviar({ especificaciones: JSON.stringify([['Solo dato']]) })).status, 422);
+});
+
+test('CSV: lee especificaciones separadas por barras y valida el modelo', async () => {
+  const { validarFila } = await import('../src/services/catalogo-csv.js');
+  const fila = { nombre: 'SSD de prueba', categoria: 'Componentes', precio_mxn: '1,299', existencias: '4', modelo_codigo: 'ssd-samsung-990-pro', especificaciones: 'Capacidad: 2 TB | Lectura: 7,450 MB/s' };
+  const p = validarFila(fila);
+  assert.equal(p.precio, 1299);
+  assert.deepEqual(p.especificaciones, [['Capacidad', '2 TB'], ['Lectura', '7,450 MB/s']]);
+  assert.throws(() => validarFila({ ...fila, modelo_codigo: 'Con Espacios' }), /modelo 3D/);
 });
 
 test('panel: cambiar estado y cancelar regresa piezas al inventario', async () => {

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAviso } from '../../components/Aviso.jsx';
+import Miniatura3D from '../../components/Miniatura3D.jsx';
 import { api } from '../../lib/api.js';
+import { GRUPOS_MODELOS } from '../../modelos3d/lista.js';
 
-const VACIO = { nombre: '', categoria_id: '', descripcion: '', precio: '', existencias: '0', stock_minimo: '2', pieza_3d: '', activo: true };
+const VACIO = { nombre: '', categoria_id: '', descripcion: '', precio: '', existencias: '0', stock_minimo: '2', pieza_3d: '', modelo_codigo: '', especificaciones: '', activo: true };
+const specsATexto = (lista = []) => lista.map(([k, v]) => `${k}: ${v}`).join('\n');
 
 export default function ProductoForm() {
   const { id } = useParams();
@@ -34,6 +37,7 @@ export default function ProductoForm() {
         setDatos({
           nombre: p.nombre, categoria_id: String(p.categoria.id), descripcion: p.descripcion || '', precio: String(p.precio),
           existencias: String(p.existencias), stock_minimo: String(p.stock_minimo), pieza_3d: p.pieza_3d || '', activo: p.activo,
+          modelo_codigo: p.modelo_codigo || '', especificaciones: specsATexto(p.especificaciones),
         });
       }).catch((e) => setError(e.message));
     }
@@ -74,6 +78,8 @@ export default function ProductoForm() {
     if (datos.nombre.trim().length < 3) return setError('El nombre necesita al menos 3 letras.');
     if (!(Number(datos.precio) > 0)) return setError('Pon un precio mayor a cero.');
     if (!Number.isInteger(Number(datos.existencias)) || Number(datos.existencias) < 0 || datos.existencias === '') return setError('Las existencias deben ser un número entero desde 0.');
+    const malo = datos.especificaciones.split('\n').map((r) => r.trim()).find((r) => r && r.indexOf(':') < 1);
+    if (malo) return setError(`Escribe cada especificación como "Dato: valor". Revisa: ${malo}`);
 
     // Se manda como FormData porque puede llevar foto y modelo 3D
     const form = new FormData();
@@ -144,10 +150,40 @@ export default function ProductoForm() {
                       <tbody>{ia.resultado.especificaciones.map((e) => <tr key={e.nombre}><th className="fw-normal text-body-secondary">{e.nombre}</th><td>{e.valor}</td></tr>)}</tbody>
                     </table>
                   )}
-                  <button type="button" className="btn btn-mt btn-sm" onClick={() => setDatos((d) => ({ ...d, descripcion: ia.resultado.descripcion_tienda || ia.resultado.resumen }))}>
-                    Usar como descripción
-                  </button>
+                  <div className="d-flex gap-2 flex-wrap">
+                    <button type="button" className="btn btn-mt btn-sm" onClick={() => setDatos((d) => ({ ...d, descripcion: ia.resultado.descripcion_tienda || ia.resultado.resumen }))}>
+                      Usar como descripción
+                    </button>
+                    {ia.resultado.especificaciones.length > 0 && (
+                      <button type="button" className="btn btn-outline-success btn-sm"
+                        onClick={() => setDatos((d) => ({ ...d, especificaciones: specsATexto(ia.resultado.especificaciones.slice(0, 20).map((e) => [e.nombre.slice(0, 40), String(e.valor).slice(0, 120)])) }))}>
+                        Usar como especificaciones
+                      </button>
+                    )}
+                  </div>
                 </div>
+              )}
+            </div>
+          </div>
+          <div className="col-12">
+            <label className="form-label w-100" htmlFor="especificaciones">Especificaciones <span className="text-body-secondary small">(una por renglón, como "Socket: AM5")</span></label>
+            <textarea id="especificaciones" rows={5} className="form-control font-monospace small" placeholder={'Núcleos / hilos: 8 / 16\nFrecuencia máxima: 5.3 GHz\nSocket: AM5'} {...campo('especificaciones')} />
+          </div>
+          <div className="col-12">
+            <div className="caja-modelo">
+              <div className="flex-grow-1">
+                <label className="form-label w-100">Modelo 3D hecho con código
+                  <select className="form-select" {...campo('modelo_codigo')}>
+                    <option value="">Sin modelo 3D</option>
+                    {GRUPOS_MODELOS.map(([grupo, lista]) => (
+                      <optgroup key={grupo} label={grupo}>{lista.map(([c, n]) => <option key={c} value={c}>{n}</option>)}</optgroup>
+                    ))}
+                  </select>
+                </label>
+                <p className="small text-body-secondary mb-0">Se muestra en el catálogo y en la ficha del producto, donde el cliente lo puede girar y desarmar. Puedes verlos todos en la <Link to="/galeria-3d" target="_blank">galería 3D</Link>.</p>
+              </div>
+              {datos.modelo_codigo && (
+                <div className="vista-modelo"><Miniatura3D key={datos.modelo_codigo} codigo={datos.modelo_codigo} alt="Vista previa del modelo 3D" respaldo={<span className="small">3D</span>} /></div>
               )}
             </div>
           </div>
@@ -178,7 +214,7 @@ export default function ProductoForm() {
             <label className="form-check"><input type="checkbox" className="form-check-input" checked={datos.activo} onChange={(e) => setDatos({ ...datos, activo: e.target.checked })} /> Visible en la tienda</label>
           </div>
         </div>
-        <p className="small text-body-secondary mb-0">Si eliges una pieza 3D y subes un modelo .glb, la escena de la tienda muestra ese modelo en lugar de la pieza dibujada, y la ficha del producto permite verlo en realidad aumentada.</p>
+        <p className="small text-body-secondary mb-0">Si subes un modelo .glb, la ficha del producto lo muestra (con realidad aumentada) en lugar del modelo hecho con código; si además eliges una pieza de la escena, la escena de la tienda también lo usa.</p>
         {error && <div className="alert alert-danger mb-0">{error}</div>}
         <div className="d-flex gap-2">
           <button className="btn btn-mt" disabled={guardando}>{guardando ? 'Guardando…' : editando ? 'Guardar cambios' : 'Dar de alta'}</button>

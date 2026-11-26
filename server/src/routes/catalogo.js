@@ -8,7 +8,7 @@ const router = Router();
 /** Consulta base de productos con su categoría, ya en la forma que usa el frontend */
 export const SELECT_PRODUCTO = `
   SELECT p.id, p.nombre, p.slug, p.descripcion, p.precio, p.existencias, p.stock_minimo,
-         p.imagen, p.modelo_3d, p.pieza_3d, p.activo,
+         p.imagen, p.modelo_3d, p.pieza_3d, p.modelo_codigo, p.especificaciones, p.activo,
          json_build_object('id', c.id, 'nombre', c.nombre, 'slug', c.slug) AS categoria
   FROM producto p JOIN categoria c ON c.id = p.categoria_id`;
 

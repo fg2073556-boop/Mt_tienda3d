@@ -10,6 +10,7 @@ import Gracias from './pages/Gracias.jsx';
 import Seguimiento from './pages/Seguimiento.jsx';
 import Login from './pages/Login.jsx';
 import NoEncontrado from './pages/NoEncontrado.jsx';
+const Galeria3D = lazy(() => import('./pages/Galeria3D.jsx'));
 const PanelLayout = lazy(() => import('./pages/panel/PanelLayout.jsx'));
 const Resumen = lazy(() => import('./pages/panel/Resumen.jsx'));
 const Productos = lazy(() => import('./pages/panel/Productos.jsx'));
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="pedido/:folio" element={<Gracias />} />
         <Route path="seguimiento" element={<Seguimiento />} />
         <Route path="login" element={<Login />} />
+        <Route path="galeria-3d" element={<Suspense fallback={<p className="contenedor banda text-body-secondary">Cargando galería…</p>}><Galeria3D /></Suspense>} />
         <Route path="*" element={<NoEncontrado />} />
       </Route>
 

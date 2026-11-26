@@ -43,6 +43,43 @@ export const oneOf = (value, field, options) => {
   return value;
 };
 
+/** Código de modelo 3D hecho con código, p. ej. "gpu-rtx-5060-ti" */
+export const modeloCodigo = (value) => {
+  const v = typeof value === 'string' ? value.trim() : '';
+  if (!v) return null;
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(v) || v.length > 40) throw new HttpError(422, 'El modelo 3D no es válido.');
+  return v;
+};
+
+/**
+ * Especificaciones del producto como lista de pares [dato, valor].
+ * Acepta un arreglo, su texto JSON o renglones "Dato: valor".
+ */
+export const especificaciones = (value) => {
+  let lista = value;
+  if (lista === undefined || lista === null || lista === '') return [];
+  if (typeof lista === 'string') {
+    const t = lista.trim();
+    if (t.startsWith('[')) {
+      try { lista = JSON.parse(t); } catch { throw new HttpError(422, 'Las especificaciones no tienen un formato válido.'); }
+    } else {
+      lista = t.split(/\r?\n/).map((r) => r.trim()).filter(Boolean).map((r) => {
+        const i = r.indexOf(':');
+        if (i < 1) throw new HttpError(422, `Escribe cada especificación como "Dato: valor" (renglón "${r.slice(0, 40)}").`);
+        return [r.slice(0, i), r.slice(i + 1)];
+      });
+    }
+  }
+  if (!Array.isArray(lista) || lista.length > 20) throw new HttpError(422, 'Las especificaciones deben ser una lista de máximo 20 datos.');
+  return lista.map((par) => {
+    if (!Array.isArray(par) || par.length !== 2) throw new HttpError(422, 'Cada especificación debe tener dato y valor.');
+    const [k, v] = par.map((x) => String(x ?? '').trim());
+    if (!k || !v) throw new HttpError(422, 'Cada especificación debe tener dato y valor.');
+    if (k.length > 40 || v.length > 120) throw new HttpError(422, 'Una especificación es demasiado larga (dato 40, valor 120 caracteres).');
+    return [k, v];
+  });
+};
+
 export const bool = (value) => value === true || value === 'true' || value === '1' || value === 1 || value === 'on';
 
 export const slugify = (s) =>
