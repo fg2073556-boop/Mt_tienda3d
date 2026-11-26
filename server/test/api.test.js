@@ -416,7 +416,7 @@ test('WhatsApp: sin configurar avisa qué falta; configurado se manda solo con l
   }
 });
 
-test('WhatsApp: arma bien la petición para CallMeBot y para la API de Meta', async () => {
+test('WhatsApp: arma bien la petición para CallMeBot, Meta y Make', async () => {
   const real = globalThis.fetch;
   const llamadas = [];
   const items = [{ nombre: 'SSD NVMe 1 TB', cantidad: 4 }, { nombre: 'Silla', cantidad: 3 }];
@@ -446,8 +446,18 @@ test('WhatsApp: arma bien la petición para CallMeBot y para la API de Meta', as
     globalThis.fetch = async () => Response.json({ error: { code: 131047, message: 'Re-engagement message' } }, { status: 400 });
     delete process.env.WHATSAPP_PLANTILLA;
     await assert.rejects(enviarWhatsapp({ telefono: '522221234567', mensaje: 'x', items }), /24 h/);
+
+    // Make: manda el pedido al webhook del escenario
+    globalThis.fetch = async (url, op = {}) => { llamadas.push({ url: String(url), op }); return new Response('Accepted'); };
+    Object.assign(process.env, { WHATSAPP_MODO: 'make', WHATSAPP_MAKE_WEBHOOK: 'https://hook.us2.make.com/abc123' });
+    await enviarWhatsapp({ telefono: '522221234567', mensaje: 'Hola Fernando', items, proveedor: 'Fernando' });
+    const make = llamadas.at(-1);
+    assert.equal(make.url, 'https://hook.us2.make.com/abc123');
+    assert.deepEqual(JSON.parse(make.op.body), { origen: 'tienda-mt', telefono: '522221234567', proveedor: 'Fernando', mensaje: 'Hola Fernando', items, lista: '4 × SSD NVMe 1 TB; 3 × Silla' });
+    process.env.WHATSAPP_MAKE_WEBHOOK = 'https://otro-sitio.com/x';
+    await assert.rejects(enviarWhatsapp({ telefono: '522221234567', mensaje: 'x', items }), /WHATSAPP_MAKE_WEBHOOK/);
   } finally {
     globalThis.fetch = real;
-    for (const k of ['WHATSAPP_MODO', 'WHATSAPP_CALLMEBOT_APIKEY', 'WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_PLANTILLA']) delete process.env[k];
+    for (const k of ['WHATSAPP_MODO', 'WHATSAPP_MAKE_WEBHOOK', 'WHATSAPP_CALLMEBOT_APIKEY', 'WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_PLANTILLA']) delete process.env[k];
   }
 });

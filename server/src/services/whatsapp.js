@@ -4,6 +4,8 @@
  *  - callmebot: gratis y en 5 minutos. El número que recibe tiene que activar el bot una vez
  *    (mandarle "I allow callmebot to send me messages" al número que indica callmebot.com) y la llave que responde va en
  *    WHATSAPP_CALLMEBOT_APIKEY. Ideal cuando quien recibe eres tú o tu equipo.
+ *  - make: la tienda le manda el pedido a un webhook de Make (WHATSAPP_MAKE_WEBHOOK) y el escenario
+ *    de Make lo envía con el WhatsApp que tengas conectado ahí (2Chat, 360Messenger, etc.).
  *  - meta: API oficial de WhatsApp Business (Cloud API). Necesita WHATSAPP_TOKEN y
  *    WHATSAPP_PHONE_ID; para escribir a alguien que no te ha escrito en las últimas 24 h
  *    hace falta una plantilla aprobada (WHATSAPP_PLANTILLA).
@@ -24,15 +26,17 @@ export function whatsappListo() {
   const modo = modoWhatsapp();
   if (modo === 'callmebot') return Boolean(limpiar(process.env.WHATSAPP_CALLMEBOT_APIKEY));
   if (modo === 'meta') return Boolean(limpiar(process.env.WHATSAPP_TOKEN) && limpiar(process.env.WHATSAPP_PHONE_ID));
+  if (modo === 'make') return /^https:\/\/hook\.[a-z0-9.]*make\.com\//.test(limpiar(process.env.WHATSAPP_MAKE_WEBHOOK));
   return false;
 }
 
 export function queFaltaWhatsapp() {
   const modo = modoWhatsapp();
-  if (!modo) return 'Falta WHATSAPP_MODO en server/.env (callmebot o meta).';
+  if (!modo) return 'Falta WHATSAPP_MODO en server/.env (make, callmebot o meta).';
+  if (modo === 'make') return 'Falta WHATSAPP_MAKE_WEBHOOK en server/.env (la dirección https://hook…make.com/… del escenario).';
   if (modo === 'callmebot') return 'Falta WHATSAPP_CALLMEBOT_APIKEY en server/.env.';
   if (modo === 'meta') return 'Falta WHATSAPP_TOKEN y WHATSAPP_PHONE_ID en server/.env.';
-  return `WHATSAPP_MODO="${modo}" no existe: usa callmebot o meta.`;
+  return `WHATSAPP_MODO="${modo}" no existe: usa make, callmebot o meta.`;
 }
 
 /** Una sola línea con la lista (las plantillas de Meta no aceptan saltos de línea en los datos) */
@@ -95,6 +99,19 @@ async function porMeta(telefono, mensaje, items, proveedor) {
   throw new Error(msg);
 }
 
+async function porMake(telefono, mensaje, items, proveedor) {
+  const r = await pedir(limpiar(process.env.WHATSAPP_MAKE_WEBHOOK), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ origen: 'tienda-mt', telefono, proveedor: proveedor || null, mensaje, items, lista: listaEnLinea(items) }),
+  });
+  if (r.ok) return;
+  const texto = await r.text().catch(() => '');
+  throw new Error(r.status === 410 || /no.*(scenario|hook)/i.test(texto)
+    ? 'Make ya no reconoce ese webhook: copia de nuevo la dirección del escenario en WHATSAPP_MAKE_WEBHOOK.'
+    : `Make respondió con error ${r.status}.`);
+}
+
 /**
  * Manda el mensaje al número del proveedor.
  * @param {{telefono:string, mensaje:string, items:Array<{nombre:string,cantidad:number}>, proveedor?:string}} datos
@@ -104,5 +121,6 @@ export async function enviarWhatsapp({ telefono, mensaje, items = [], proveedor 
   if (!whatsappListo()) throw new Error(queFaltaWhatsapp());
   if (enviosPrueba) { enviosPrueba.push({ telefono, mensaje, items, proveedor }); return; }
   if (modoWhatsapp() === 'meta') return porMeta(telefono, mensaje, items, proveedor);
+  if (modoWhatsapp() === 'make') return porMake(telefono, mensaje, items, proveedor);
   return porCallmebot(telefono, mensaje);
 }

@@ -161,6 +161,7 @@ Cuando algo se agota o llega a su mínimo, el servidor también le manda al prov
 
 | Modo | Para qué | Qué necesita |
 |---|---|---|
+| `make` | Mandar desde tu propio WhatsApp | Escenario de Make *M&T · WhatsApp al proveedor cuando algo se acaba* (webhook → 2Chat) con tu WhatsApp conectado por QR; la dirección del webhook va en `WHATSAPP_MAKE_WEBHOOK` |
 | `callmebot` | Demo o avisos al equipo (gratis, solo uso personal) | Desde el WhatsApp que recibe, mandar *I allow callmebot to send me messages* al bot de callmebot.com y poner la llave en `WHATSAPP_CALLMEBOT_APIKEY` |
 | `meta` | Proveedor real (API oficial de WhatsApp Business) | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` y una plantilla aprobada en `WHATSAPP_PLANTILLA` con `{{1}}` proveedor y `{{2}}` lista |
 
