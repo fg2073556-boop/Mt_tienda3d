@@ -17,6 +17,7 @@ const Productos = lazy(() => import('./pages/panel/Productos.jsx'));
 const ProductoForm = lazy(() => import('./pages/panel/ProductoForm.jsx'));
 const Pedidos = lazy(() => import('./pages/panel/Pedidos.jsx'));
 const PedidoDetalle = lazy(() => import('./pages/panel/PedidoDetalle.jsx'));
+const Reposicion = lazy(() => import('./pages/panel/Reposicion.jsx'));
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="productos/:id" element={<RutaProtegida roles={['administrador']}><ProductoForm /></RutaProtegida>} />
         <Route path="pedidos" element={<Pedidos />} />
         <Route path="pedidos/:id" element={<PedidoDetalle />} />
+        <Route path="reposicion" element={<Reposicion />} />
       </Route>
     </Routes>
   );
