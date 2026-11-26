@@ -84,7 +84,7 @@ def caja(t):
             f'<div class="h">{t}{extra}</div>{filas}</div>')
 
 
-# Relaciones reales (FOREIGN KEY): (tabla 1, campo, lado, tabla N, campo, lado, ruta, texto)
+# Relaciones reales (FOREIGN KEY): (tabla 1, campo, lado, tabla M, campo, lado, ruta, texto)
 R = [
     ('categoria', 'id', 'r', 'producto', 'categoria_id', 'l', [380], ''),
     ('producto', 'id', 'r', 'pedido_detalle', 'producto_id', 'l', [800], ''),
@@ -113,15 +113,15 @@ for a, ca, la, b, cb, lb, xs, txt in R:
     p1, p2 = borde(a, ca, la), borde(b, cb, lb)
     lineas.append(f'<path d="{ruta(p1, p2, xs)}"/>')
     marca(p1[0], p1[1], '1', la == 'l')
-    marca(p2[0], p2[1], 'N', lb == 'l')
+    marca(p2[0], p2[1], 'M', lb == 'l')
     if txt:
         marcas.append(f'<em style="left:{xs[0] + 6}px;top:{(p1[1] + p2[1]) / 2 - 9}px">{txt}</em>')
 
-# usuario 1 — N pedido (rodea por abajo)
+# usuario 1 — M pedido (rodea por abajo)
 u, pu = borde('usuario', 'id', 'r'), borde('pedido', 'usuario_id', 'l')
 lineas.append(f'<path d="M{u[0]},{u[1]} L395,{u[1]} L395,985 L1230,985 L1230,{pu[1]} L{pu[0]},{pu[1]}"/>')
 marca(*u, '1', False)
-marca(*pu, 'N', True)
+marca(*pu, 'M', True)
 marcas.append('<em style="left:560px;top:991px">SET NULL · los pedidos de invitado o anteriores a las cuentas no tienen usuario</em>')
 
 # Relación lógica (sin FK): el pedido copia CP, colonia, municipio y zona al comprar
@@ -133,7 +133,7 @@ leyenda = ''.join(f'<span><i style="background:{c}"></i>{n}</span>' for c, n in 
 notas = f'''
 <div class="notas" style="left:1260px;top:815px;width:770px">
   <div class="ley">{leyenda}</div>
-  <p><b>1 — N</b> relación con llave foránea · <b>CASCADE</b> se borra con el padre · <b>SET NULL</b> se conserva sin el padre ·
+  <p><b>1 — M</b> relación con llave foránea · <b>CASCADE</b> se borra con el padre · <b>SET NULL</b> se conserva sin el padre ·
   <span class="punteada"></span> relación lógica sin llave foránea.</p>
   <p><b>pedido_detalle</b> y los campos <b>envio_*</b> de pedido guardan una copia al momento de la compra: si cambia un precio,
   una zona o se borra un producto, el pedido no se altera. Los números de tarjeta nunca se guardan (Openpay los tokeniza).</p>
