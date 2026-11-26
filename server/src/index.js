@@ -5,6 +5,7 @@ const { crearApp } = await import('./app.js');
 const { pool } = await import('./db.js');
 const { migrar } = await import('./migraciones.js');
 const { sincronizarCuentas } = await import('./cuentas.js');
+const { iniciarAvisos } = await import('./services/avisos.js');
 
 if (!process.env.JWT_SECRET) {
   console.error('Falta JWT_SECRET en server/.env');
@@ -40,7 +41,10 @@ try {
 const port = Number(process.env.PORT || 3001);
 // En Express 5 el callback de listen también recibe el error si no se pudo abrir el puerto
 crearApp().listen(port, (error) => {
-  if (!error) return console.log(`API de M&T lista en http://localhost:${port}`);
+  if (!error) {
+    iniciarAvisos(pool); // correo automático cuando algo se está acabando
+    return console.log(`API de M&T lista en http://localhost:${port}`);
+  }
   if (error.code === 'EADDRINUSE') {
     console.error(`El puerto ${port} está ocupado por otro programa.`);
     console.error('Ciérralo, o cambia PORT en server/.env (el frontend lo detecta solo) y vuelve a arrancar.');

@@ -75,8 +75,20 @@ CREATE TABLE alerta_stock (
     tipo         VARCHAR(10) NOT NULL CHECK (tipo IN ('agotado', 'bajo')),
     existencias  INT         NOT NULL,
     leida_en     TIMESTAMPTZ,
+    notificada_en TIMESTAMPTZ,              -- cuándo se mandó por correo (NULL = falta avisar)
     creada_en    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Avisos de reposición: a quién se manda el correo y a qué proveedor se le pide por WhatsApp (una sola fila)
+CREATE TABLE ajuste_reposicion (
+    id                  INT          PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    correo_destino      VARCHAR(400),             -- uno o varios correos separados por coma
+    aviso_automatico    BOOLEAN      NOT NULL DEFAULT TRUE,
+    proveedor_nombre    VARCHAR(120),
+    proveedor_whatsapp  VARCHAR(20),              -- solo dígitos, con lada de país (52...)
+    actualizado_en      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+INSERT INTO ajuste_reposicion (id) VALUES (1);
 
 CREATE INDEX idx_producto_categoria ON producto(categoria_id);
 CREATE INDEX idx_producto_pieza     ON producto(pieza_3d) WHERE eliminado_en IS NULL;
@@ -84,3 +96,4 @@ CREATE INDEX idx_pedido_estado      ON pedido(estado);
 CREATE INDEX idx_pedido_creado      ON pedido(creado_en DESC);
 CREATE INDEX idx_detalle_pedido     ON pedido_detalle(pedido_id);
 CREATE INDEX idx_alerta_no_leida    ON alerta_stock(creada_en DESC) WHERE leida_en IS NULL;
+CREATE INDEX idx_alerta_sin_aviso   ON alerta_stock(creada_en) WHERE notificada_en IS NULL;
