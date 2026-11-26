@@ -11,6 +11,7 @@
     "crear-usuarios": "npm run crear-usuarios --prefix server",
     "migrar": "npm run migrar --prefix server",
     "importar-catalogo": "npm run importar-catalogo --prefix server",
+    "predev": "node scripts/revisar-dependencias.js",
     "dev": "concurrently -n api,web -c green,cyan \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "test": "npm test --prefix server",
     "build": "npm run build --prefix client"
