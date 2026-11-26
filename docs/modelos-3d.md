@@ -49,6 +49,9 @@ Procesadores Core Ultra 9 285K, Core Ultra 7 265K, Ryzen 9 9950X3D y Ryzen 5 560
 
 ## Rendimiento
 
-- Las miniaturas se dibujan una por una, solo cuando la tarjeta aparece en pantalla, y se reutilizan.
+- Las miniaturas se dibujan una por una, solo cuando la tarjeta aparece en pantalla, y se **guardan en el navegador** (`localStorage`, unos 320 KB en total): desde la segunda visita salen al instante.
+- **Si cambias un modelo**, sube el número `VERSION` en `miniaturas.js`; si no, los navegadores seguirán mostrando la miniatura vieja.
+- Si una pieza falla al dibujarse, las demás siguen. Si el navegador apaga el contexto de WebGL, se crea otro y se reintenta.
+- Cada visor crea su propio lienzo y libera su contexto de WebGL al cerrarse (los navegadores permiten unos 16 a la vez).
 - Todo el código 3D se descarga hasta que hace falta (la página principal no lo carga si no hay tarjetas visibles).
 - En computadoras sin aceleración gráfica (o en máquinas virtuales) las miniaturas tardan más en aparecer; con una GPU normal salen casi al instante.

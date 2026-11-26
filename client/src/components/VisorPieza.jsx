@@ -9,7 +9,6 @@ import { desarmar, liberar } from '../modelos3d/index.js';
  */
 export default function VisorPieza({ codigo, alto = 420 }) {
   const cajaRef = useRef(null);
-  const canvasRef = useRef(null);
   const motor = useRef(null);
   const reducir = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const [giro, setGiro] = useState(!reducir);
@@ -21,15 +20,20 @@ export default function VisorPieza({ codigo, alto = 420 }) {
   sepRef.current = separar;
 
   useEffect(() => {
+    // El lienzo se crea aquí (y se desecha al salir) para poder liberar su contexto de WebGL sin afectar al siguiente
+    const cv = document.createElement('canvas');
+    cv.setAttribute('aria-label', 'Modelo 3D. Arrastra para girarlo, usa la rueda para acercarlo.');
+    cajaRef.current.append(cv);
     let R;
-    try { R = crearRenderer({ canvas: canvasRef.current }); } catch { setSinWebGL(true); return undefined; }
+    try { R = crearRenderer({ canvas: cv }); } catch { cv.remove(); setSinWebGL(true); return undefined; }
     const esc = crearEscenario(R);
-    const ctrl = new OrbitControls(esc.C, canvasRef.current);
+    const ctrl = new OrbitControls(esc.C, cv);
     ctrl.enableDamping = true; ctrl.enablePan = false; ctrl.maxPolarAngle = Math.PI * .49;
     ctrl.addEventListener('start', () => setGiro(false));
     motor.current = { R, esc, ctrl, t: 0 };
 
     const ajustar = () => {
+      if (!cajaRef.current) return;
       const w = cajaRef.current.clientWidth, h = cajaRef.current.clientHeight;
       R.setSize(w, h, false); esc.C.aspect = w / h; esc.C.updateProjectionMatrix();
     };
@@ -49,13 +53,13 @@ export default function VisorPieza({ codigo, alto = 420 }) {
       id = requestAnimationFrame(bucle);
     };
     id = requestAnimationFrame(bucle);
-    return () => { cancelAnimationFrame(id); ro.disconnect(); ctrl.dispose(); liberar(esc.actual); R.dispose(); motor.current = null; };
+    return () => { cancelAnimationFrame(id); ro.disconnect(); ctrl.dispose(); liberar(esc.actual); R.dispose(); R.forceContextLoss(); cv.remove(); motor.current = null; };
   }, [reducir]);
 
   // carga el modelo cuando cambia el código
   useEffect(() => {
     const m = motor.current;
-    if (!m) return;
+    if (!m || !cajaRef.current) return;
     liberar(m.esc.actual);
     const modelo = m.esc.mostrar(codigo);
     if (modelo) m.esc.encuadrar(modelo, m.ctrl, cajaRef.current.clientWidth / cajaRef.current.clientHeight);
@@ -65,9 +69,7 @@ export default function VisorPieza({ codigo, alto = 420 }) {
   if (sinWebGL) return <div className="visor-pieza vacio" style={{ height: alto }}>Tu navegador no puede mostrar 3D.</div>;
   return (
     <div className="visor-pieza">
-      <div ref={cajaRef} className="visor-lienzo" style={{ height: alto }}>
-        <canvas ref={canvasRef} aria-label="Modelo 3D. Arrastra para girarlo, usa la rueda para acercarlo." />
-      </div>
+      <div ref={cajaRef} className="visor-lienzo" style={{ height: alto }} />
       <div className="visor-controles">
         <label className="flex-grow-1 small">
           Desarmar pieza
@@ -77,7 +79,7 @@ export default function VisorPieza({ codigo, alto = 420 }) {
           {giro ? 'Pausar giro' : 'Girar solo'}
         </button>
         <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => {
-          const m = motor.current; if (!m?.esc.actual) return;
+          const m = motor.current; if (!m?.esc.actual || !cajaRef.current) return;
           m.esc.actual.g.rotation.set(0, 0, 0); m.esc.encuadrar(m.esc.actual, m.ctrl, cajaRef.current.clientWidth / cajaRef.current.clientHeight); setSeparar(0);
         }}>Centrar</button>
       </div>

@@ -14,7 +14,6 @@ const COLORES = [
  */
 export default function Escena3D({ piezas, seleccion, onSeleccion }) {
   const figRef = useRef(null);
-  const canvasRef = useRef(null);
   const labelsRef = useRef(null);
   const escena = useRef(null);
   const onSelRef = useRef(onSeleccion);
@@ -28,9 +27,13 @@ export default function Escena3D({ piezas, seleccion, onSeleccion }) {
 
   // Crea la escena una sola vez
   useEffect(() => {
-    const fig = figRef.current, cv = canvasRef.current, lab = labelsRef.current;
+    const fig = figRef.current, lab = labelsRef.current;
+    // El lienzo se crea aquí (y se desecha al salir) para poder liberar su contexto de WebGL sin afectar al siguiente
+    const cv = document.createElement('canvas');
+    cv.setAttribute('aria-label', 'Escena 3D de un escritorio con PC gamer');
+    fig.prepend(cv);
     let R;
-    try { R = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true }); } catch { setSinWebGL(true); return undefined; }
+    try { R = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true }); } catch { cv.remove(); setSinWebGL(true); return undefined; }
     R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     R.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -199,7 +202,7 @@ export default function Escena3D({ piezas, seleccion, onSeleccion }) {
       cancelAnimationFrame(raf); ro.disconnect();
       cv.removeEventListener('pointerdown', down); cv.removeEventListener('pointermove', move); cv.removeEventListener('pointerup', up); cv.removeEventListener('pointercancel', cancel); cv.removeEventListener('wheel', wheel);
       S.traverse((o) => { o.geometry?.dispose(); [].concat(o.material || []).forEach((m) => { m.map?.dispose(); m.dispose(); }); });
-      R.dispose(); lab.replaceChildren(); escena.current = null;
+      R.dispose(); R.forceContextLoss(); cv.remove(); lab.replaceChildren(); escena.current = null;
     };
   }, [reducir]);
 
@@ -217,7 +220,6 @@ export default function Escena3D({ piezas, seleccion, onSeleccion }) {
   return (
     <div>
       <div className={`escena${sinWebGL ? ' sin-webgl' : ''}`} ref={figRef}>
-        <canvas ref={canvasRef} aria-label="Escena 3D de un escritorio con PC gamer" />
         <div className="etiquetas" ref={labelsRef} />
         <div className="pista">Arrastra para girar · rueda para acercar · toca una pieza</div>
       </div>
