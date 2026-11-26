@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import multer from 'multer';
 import adminRoutes, { UPLOADS } from './routes/admin.js';
 import asesorRoutes from './routes/asesor.js';
@@ -12,6 +13,8 @@ import iaRoutes from './routes/ia.js';
 import reposicionRoutes from './routes/reposicion.js';
 import { HttpError } from './errors.js';
 
+const FOTOS_CATALOGO = fileURLToPath(new URL('../../assets/imagenes/productos', import.meta.url));
+
 /** Crea la aplicación Express (separada de index.js para poder probarla) */
 export function crearApp() {
   for (const sub of ['productos', 'modelos']) fs.mkdirSync(path.join(UPLOADS, sub), { recursive: true });
@@ -20,6 +23,8 @@ export function crearApp() {
   app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173' }));
   app.use(express.json({ limit: '1mb' }));
 
+  // Fotos del catálogo que vienen en el repositorio (assets/imagenes/productos)
+  app.use('/uploads/catalogo', express.static(FOTOS_CATALOGO, { maxAge: '7d' }));
   // Fotos y modelos 3D subidos desde el panel
   app.use('/uploads', express.static(UPLOADS, { maxAge: '1d' }));
 

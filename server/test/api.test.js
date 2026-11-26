@@ -25,6 +25,7 @@ const { crearApp } = await import('../src/app.js');
 const { sincronizarCuentas } = await import('../src/cuentas.js');
 const { revisarAvisos, usarTransporte } = await import('../src/services/avisos.js');
 const { enviarWhatsapp, usarWhatsappDePrueba } = await import('../src/services/whatsapp.js');
+const { migrar } = await import('../src/migraciones.js');
 
 let server;
 let base;
@@ -460,4 +461,22 @@ test('WhatsApp: arma bien la petición para CallMeBot, Meta y Make', async () =>
     globalThis.fetch = real;
     for (const k of ['WHATSAPP_MODO', 'WHATSAPP_MAKE_WEBHOOK', 'WHATSAPP_CALLMEBOT_APIKEY', 'WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID', 'WHATSAPP_PLANTILLA']) delete process.env[k];
   }
+});
+
+test('fotos del catálogo: se ponen una sola vez y se sirven desde /uploads/catalogo', async () => {
+  const slug = 'ssd-samsung-990-pro-nvme-m-2-2-tb';
+  await migrar(pool);
+  const ficha = await api('GET', `/api/productos/${slug}`);
+  assert.equal(ficha.body.imagen_url, `/uploads/catalogo/${slug}.webp`);
+  const foto = await fetch(base + ficha.body.imagen_url);
+  assert.equal(foto.status, 200);
+  assert.match(foto.headers.get('content-type'), /image\/webp/);
+  assert.equal((await fetch(`${base}/uploads/catalogo/no-existe.webp`)).status, 404);
+
+  // Si el administrador quita la foto, al reiniciar no se vuelve a poner
+  await pool.query('UPDATE producto SET imagen = NULL WHERE slug = $1', [slug]);
+  await migrar(pool);
+  assert.equal((await api('GET', `/api/productos/${slug}`)).body.imagen_url, null);
+  // Los productos sin foto en el archivo (software, SSD genérico) se quedan sin foto
+  assert.equal((await api('GET', '/api/productos/ssd-nvme-1-tb')).body.imagen_url, null);
 });
