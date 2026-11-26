@@ -33,7 +33,7 @@ export default function Producto() {
     setError('');
     setVerFoto(false);
     api(`/productos/${slug}`)
-      .then((p) => { setProducto(p); if (p.modelo_url) cargarModelViewer(); })
+      .then((p) => { setProducto(p); setVerFoto(Boolean(p.imagen_url)); if (p.modelo_url) cargarModelViewer(); })
       .catch((e) => setError(e.message));
   }, [slug]);
 
@@ -55,13 +55,22 @@ export default function Producto() {
               <div className="foto-grande">
                 {producto.modelo_url ? (
                   <model-viewer src={producto.modelo_url} alt={`Modelo 3D de ${producto.nombre}`} camera-controls="" auto-rotate="" ar="" ar-modes="webxr scene-viewer quick-look" shadow-intensity="1" />
+                ) : producto.imagen_url && producto.modelo_codigo ? (
+                  // La foto es la vista principal; al tocarla aparece el modelo 3D girando
+                  <button type="button" className="foto-a-3d" onClick={() => setVerFoto(false)} aria-label={`Ver ${producto.nombre} en 3D`}>
+                    <img src={producto.imagen_url} alt={producto.nombre} />
+                    <span className="chip-3d grande" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /><path d="m12 12 8-4.5M12 12v9M12 12 4 7.5" /></svg>
+                      Toca para verlo en 3D
+                    </span>
+                  </button>
                 ) : producto.imagen_url ? <img src={producto.imagen_url} alt={producto.nombre} /> : <Icono producto={producto} />}
               </div>
             )}
             {producto.modelo_codigo && !producto.modelo_url && producto.imagen_url && (
               <div className="vista-foto" role="group" aria-label="Vista del producto">
-                <button type="button" className={`btn btn-sm ${verFoto ? 'btn-outline-secondary' : 'btn-mt'}`} onClick={() => setVerFoto(false)} aria-pressed={!verFoto}>Modelo 3D</button>
                 <button type="button" className={`btn btn-sm ${verFoto ? 'btn-mt' : 'btn-outline-secondary'}`} onClick={() => setVerFoto(true)} aria-pressed={verFoto}>Foto</button>
+                <button type="button" className={`btn btn-sm ${verFoto ? 'btn-outline-secondary' : 'btn-mt'}`} onClick={() => setVerFoto(false)} aria-pressed={!verFoto}>Modelo 3D</button>
               </div>
             )}
             {producto.modelo_url && <p className="small text-body-secondary mt-2">Gira el modelo con el dedo o el mouse. En celular, toca el ícono de realidad aumentada para verlo en tu espacio.</p>}
