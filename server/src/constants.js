@@ -10,6 +10,7 @@ export const PIEZAS = {
   monitor: 'Monitor',
   kb: 'Teclado y mouse',
   desk: 'Escritorio',
+  silla: 'Silla',
 };
 
 export const ESTADOS = {

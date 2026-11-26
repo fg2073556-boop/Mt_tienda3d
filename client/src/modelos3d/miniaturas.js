@@ -11,7 +11,7 @@ import { liberar } from './index.js';
 const listas = new Map(); // codigo -> Promise<string>
 // Las imágenes se guardan en el navegador para que la próxima visita salgan al instante.
 // Sube este número cuando cambies algún modelo para que se vuelvan a dibujar.
-const VERSION = 2;
+const VERSION = 3;
 const CLAVE = `mt-miniaturas-v${VERSION}`;
 let guardadas = {};
 try { guardadas = JSON.parse(localStorage.getItem(CLAVE) || '{}'); } catch { guardadas = {}; }

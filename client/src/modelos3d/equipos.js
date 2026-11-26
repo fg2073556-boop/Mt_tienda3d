@@ -8,7 +8,14 @@ import {
 } from './base.js';
 import { memoria } from './memorias.js';
 import { placaMadre } from './placas.js';
-import { tarjetaVideo, ventilador120 } from './componentes.js';
+import { fuente, ssd, tarjetaVideo, ventilador120 } from './componentes.js';
+import { procesador } from './procesadores.js';
+
+/** Marca todas las mallas de un objeto con la pieza del catálogo a la que pertenecen */
+export function marcar(obj, pieza) {
+  obj.traverse((o) => { if (o.isMesh) o.userData.pieza = pieza; });
+  return obj;
+}
 
 /** Coloca una tarjeta madre (modelada acostada) sobre la pared derecha de un gabinete */
 function montarEnPared(obj) {
@@ -46,7 +53,13 @@ export function pcGamer({ nombre = 'M&T FÉNIX', rgb = true } = {}) {
   ram.g.children.forEach((m, i) => { m.position.z = i ? 1.9 : 0; });
   mb.g.add(ram.g);
   // bomba sobre el socket
-  const bomba = new THREE.Group(); bomba.position.set(-12.2 + 10, 0, -15.25 + 8); mb.g.add(bomba);
+  // procesador en el socket (se ve al quitar la bomba)
+  const cpu = procesador({ tipo: 'am5', linea: 'RYZEN 7', modelo: '7700', codigo: 'AM5' });
+  cpu.g.rotation.set(0, 0, 0); cpu.g.position.set(-12.2 + 10, .45, -15.25 + 8); mb.g.add(cpu.g);
+  // SSD M.2 junto a la cubierta del chipset
+  const disco = ssd();
+  disco.g.rotation.set(0, 0, 0); disco.g.position.set(-12.2 + 16.5, .3, -15.25 + 8 + 11.5); mb.g.add(disco.g);
+  const bomba = new THREE.Group(); bomba.position.set(-12.2 + 10, .9, -15.25 + 8); mb.g.add(bomba);
   rcaja(6.5, 2, 6.5, .6, M.plastico, 0, 1.2, 0, bomba);
   const anillo = new THREE.Mesh(new THREE.TorusGeometry(2.5, .16, 12, 80), M.rgb); anillo.rotation.x = Math.PI / 2; anillo.position.y = 2.25; bomba.add(anillo);
   cil(2.35, 2.35, .2, [M.plastico, matEtiqueta(etiqueta('pump:' + nombre, 512, 512, '#0f1214', '#e9edf0', [[nombre, 60, 256, 256, '800', 'center']]), .35), M.plastico], 0, 2.25, 0, bomba, 48).rotation.y = Math.PI / 2;
@@ -73,12 +86,16 @@ export function pcGamer({ nombre = 'M&T FÉNIX', rgb = true } = {}) {
   // tubos de la bomba al radiador del frente
   g.updateMatrixWorld(true);
   const centroBomba = bomba.localToWorld(new THREE.Vector3(0, 1.4, 0));
+  const tubos = [];
   [-1, 1].forEach((k) => {
     const a = centroBomba.clone().add(new THREE.Vector3(-1.5, 0, k * 1.6));
     const curva = new THREE.CatmullRomCurve3([a, a.clone().add(new THREE.Vector3(-3, 2, 4)), new THREE.Vector3(-2 + k * 2, H - 6, D / 2 - 8), new THREE.Vector3(-2 + k * 2, H - 8, D / 2 - 5)]);
-    const tubo = new THREE.Mesh(new THREE.TubeGeometry(curva, 50, .5, 12), color(0x1d2125, .85)); tubo.castShadow = true; g.add(tubo);
+    const tubo = new THREE.Mesh(new THREE.TubeGeometry(curva, 50, .5, 12), color(0x1d2125, .85)); tubo.castShadow = true; g.add(tubo); tubos.push(tubo);
   });
-  rcaja(W - 6, 28, 2.6, .2, M.negroMate, 0, 25, D / 2 - 5.4, g); // radiador frontal
+  const radiador = rcaja(W - 6, 28, 2.6, .2, M.negroMate, 0, 25, D / 2 - 5.4, g); // radiador frontal
+  // fuente de poder bajo la cubierta, con la etiqueta hacia el vidrio
+  const psu = fuente({ potencia: 750, eficiencia: 'GOLD', modular: 'total', marca: 'M&T VOLT' });
+  psu.g.rotation.set(0, -Math.PI / 2, 0); psu.g.position.set(1, 4.9, -14.6); g.add(psu.g);
 
   // paneles que se quitan al desarmar
   const vidrio = new THREE.Group(); vidrio.position.set(-W / 2, H / 2, 0); g.add(vidrio);
@@ -95,9 +112,14 @@ export function pcGamer({ nombre = 'M&T FÉNIX', rgb = true } = {}) {
   partes.push(
     { obj: vidrio, off: [-14, 0, 0] }, { obj: frontal, off: [0, 0, 14] }, { obj: techo, off: [0, 10, 0] },
     { obj: gpuSoporte, off: [-12, 0, 0] }, { obj: frente, off: [0, 0, 8] }, { obj: cubierta, off: [-8, -4, 0] },
+    { obj: bomba, off: [0, 6, 0] }, { obj: ram.g, off: [0, 3, 0] },
   );
+  // qué parte del modelo corresponde a cada producto (la escena de la tienda las vuelve seleccionables)
+  marcar(g, 'gab');
+  const piezas = { cpu: [cpu.g], ssd: [disco.g], ram: [ram.g], gpu: [gpuSoporte], psu: [psu.g], cooler: [bomba, radiador, ...tubos], fans: [frente, trasero.g] };
+  Object.entries(piezas).forEach(([k, objs]) => objs.forEach((o) => marcar(o, k)));
   g.rotation.y = 1.75; // el vidrio queda de frente a la cámara
-  return { g, partes };
+  return { g, partes, piezas: { ...piezas, gab: [g] } };
 }
 
 export function pcOficina({ nombre = 'M&T BÁSICA' } = {}) {
