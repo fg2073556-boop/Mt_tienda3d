@@ -26,6 +26,7 @@ const { sincronizarCuentas } = await import('../src/cuentas.js');
 const { revisarAvisos, usarTransporte } = await import('../src/services/avisos.js');
 const { enviarWhatsapp, usarWhatsappDePrueba } = await import('../src/services/whatsapp.js');
 const { migrar } = await import('../src/migraciones.js');
+const { revisarPendientes } = await import('../src/services/pagos.js');
 
 let server;
 let base;
@@ -479,4 +480,142 @@ test('fotos del catálogo: se ponen una sola vez y se sirven desde /uploads/cata
   assert.equal((await api('GET', `/api/productos/${slug}`)).body.imagen_url, null);
   // Los productos sin foto en el archivo (software, SSD genérico) se quedan sin foto
   assert.equal((await api('GET', '/api/productos/ssd-nvme-1-tb')).body.imagen_url, null);
+});
+
+/* ---------- Pagos con Openpay (la API de Openpay se simula) ---------- */
+function simularOpenpay(responder) {
+  const real = globalThis.fetch;
+  const llamadas = [];
+  globalThis.fetch = async (url, op = {}) => {
+    if (!String(url).includes('openpay.mx')) return real(url, op);
+    const cuerpo = op.body ? JSON.parse(op.body) : null;
+    llamadas.push({ url: String(url), metodo: op.method || 'GET', cuerpo, auth: op.headers?.Authorization });
+    const [status, datos] = responder(String(url), op.method || 'GET', cuerpo);
+    return Response.json(datos, { status });
+  };
+  Object.assign(process.env, { OPENPAY_MERCHANT_ID: 'mtienda123', OPENPAY_PUBLIC_KEY: 'pk_prueba', OPENPAY_PRIVATE_KEY: 'sk_prueba' });
+  return {
+    llamadas,
+    restaurar: () => {
+      globalThis.fetch = real;
+      for (const k of ['OPENPAY_MERCHANT_ID', 'OPENPAY_PUBLIC_KEY', 'OPENPAY_PRIVATE_KEY', 'OPENPAY_WEBHOOK_USUARIO', 'OPENPAY_WEBHOOK_CLAVE']) delete process.env[k];
+    },
+  };
+}
+const compra = async (slug, metodo, extra = {}) => api('POST', '/api/pedidos', {
+  body: { cliente_nombre: 'Ana María López Pérez', cliente_correo: 'ana@ejemplo.com', cliente_telefono: '222 123 4567', direccion: 'Calle 5, Tepeaca', metodo_pago: metodo, items: [{ producto_id: await idDe(slug), cantidad: 1 }], ...extra },
+});
+
+test('pagos: sin llaves de Openpay solo hay pago simulado', async () => {
+  assert.deepEqual((await api('GET', '/api/pagos/config')).body, { activo: false });
+  const r = await compra('suite-de-oficina-1-ano', 'tarjeta', { token_id: 'tok', device_session_id: 'dev' });
+  assert.equal(r.status, 422);
+});
+
+test('pagos: tarjeta aprobada con Openpay queda pagada y solo guarda los últimos 4 dígitos', async () => {
+  const o = simularOpenpay(() => [200, { id: 'trq1cargoaprobado', status: 'completed', method: 'card', authorization: '801585', card: { card_number: '411111XXXXXX1111', brand: 'visa', bank_name: 'Banamex', type: 'debit' } }]);
+  try {
+    const config = (await api('GET', '/api/pagos/config')).body;
+    assert.deepEqual(config, { activo: true, merchantId: 'mtienda123', publicKey: 'pk_prueba', sandbox: true });
+
+    // Con Openpay activo ya no se acepta la tarjeta simulada
+    assert.equal((await compra('suite-de-oficina-1-ano', 'tarjeta_prueba')).status, 422);
+    assert.equal((await compra('suite-de-oficina-1-ano', 'tarjeta')).status, 422, 'sin token no se cobra');
+
+    const antes = await existencias('suite-de-oficina-1-ano');
+    const r = await compra('suite-de-oficina-1-ano', 'tarjeta', { token_id: 'tokabc123', device_session_id: 'sesion-antifraude' });
+    assert.equal(r.status, 201);
+    assert.equal(r.body.estado, 'pagado');
+    assert.deepEqual(r.body.pago.datos.tarjeta, { marca: 'visa', ultimos4: '1111', banco: 'Banamex', tipo: 'debit' });
+    assert.equal(await existencias('suite-de-oficina-1-ano'), antes - 1);
+
+    const cargo = o.llamadas.at(-1);
+    assert.equal(cargo.url, 'https://sandbox-api.openpay.mx/v1/mtienda123/charges');
+    assert.equal(cargo.auth, `Basic ${Buffer.from('sk_prueba:').toString('base64')}`);
+    assert.equal(cargo.cuerpo.method, 'card');
+    assert.equal(cargo.cuerpo.source_id, 'tokabc123');
+    assert.equal(cargo.cuerpo.device_session_id, 'sesion-antifraude');
+    assert.equal(cargo.cuerpo.amount, 1299);
+    assert.equal(cargo.cuerpo.currency, 'MXN');
+    assert.match(cargo.cuerpo.order_id, new RegExp(`^${r.body.folio}-`));
+    assert.deepEqual(cargo.cuerpo.customer, { name: 'Ana María', last_name: 'López Pérez', email: 'ana@ejemplo.com', phone_number: '2221234567' });
+
+    const { rows: [guardado] } = await pool.query('SELECT pago_id, pago_estado, pagado_en, pago_datos::text FROM pedido WHERE folio = $1', [r.body.folio]);
+    assert.equal(guardado.pago_id, 'trq1cargoaprobado');
+    assert.ok(guardado.pagado_en);
+    assert.doesNotMatch(guardado.pago_datos, /411111/);
+  } finally { o.restaurar(); }
+});
+
+test('pagos: tarjeta rechazada no guarda el pedido ni descuenta existencias', async () => {
+  const o = simularOpenpay(() => [402, { error_code: 3001, description: 'The card was declined' }]);
+  try {
+    const antes = await existencias('suite-de-oficina-1-ano');
+    const { rows: [{ n: pedidosAntes }] } = await pool.query('SELECT COUNT(*)::int AS n FROM pedido');
+    const r = await compra('suite-de-oficina-1-ano', 'tarjeta', { token_id: 'tokrechazo', device_session_id: 'sesion' });
+    assert.equal(r.status, 402);
+    assert.match(r.body.error, /rechazó la tarjeta/);
+    assert.equal(await existencias('suite-de-oficina-1-ano'), antes);
+    assert.equal((await pool.query('SELECT COUNT(*)::int AS n FROM pedido')).rows[0].n, pedidosAntes);
+  } finally { o.restaurar(); }
+});
+
+test('pagos: transferencia SPEI da CLABE, el cliente la ve y el webhook confirma el pago', async () => {
+  let pagado = false;
+  const o = simularOpenpay((url, metodo) => {
+    const cargo = { id: 'trqspei000000001', method: 'bank_account', due_date: '2026-12-03T23:59:59-06:00',
+      payment_method: { type: 'bank_transfer', bank: 'STP', clabe: '646180109400000001', name: '12345678901234567' } };
+    if (metodo === 'GET') return [200, { ...cargo, status: pagado ? 'completed' : 'in_progress' }];
+    return [200, { ...cargo, status: 'in_progress' }];
+  });
+  try {
+    const r = await compra('windows-11-pro-licencia-digital', 'transferencia');
+    assert.equal(r.status, 201);
+    assert.equal(r.body.estado, 'pendiente');
+    assert.equal(r.body.pago.datos.clabe, '646180109400000001');
+    assert.equal(o.llamadas.at(-1).cuerpo.method, 'bank_account');
+
+    const seg = await api('POST', '/api/pedidos/seguimiento', { body: { folio: r.body.folio, correo: 'ana@ejemplo.com' } });
+    assert.equal(seg.body.pago_datos.referencia, '12345678901234567');
+
+    // Un webhook falso que dice "pagado" no basta: se consulta a Openpay y todavía no está pagado
+    await api('POST', '/api/pagos/openpay/webhook', { body: { type: 'charge.succeeded', transaction: { id: 'trqspei000000001', status: 'completed' } } });
+    assert.equal((await pool.query('SELECT estado FROM pedido WHERE folio = $1', [r.body.folio])).rows[0].estado, 'pendiente');
+
+    pagado = true;
+    const w = await api('POST', '/api/pagos/openpay/webhook', { body: { type: 'charge.succeeded', transaction: { id: 'trqspei000000001' } } });
+    assert.equal(w.status, 200);
+    const { rows: [p] } = await pool.query('SELECT estado, pago_estado, pagado_en FROM pedido WHERE folio = $1', [r.body.folio]);
+    assert.equal(p.estado, 'pagado');
+    assert.equal(p.pago_estado, 'completed');
+    assert.ok(p.pagado_en);
+
+    // Webhook con contraseña: sin ella se rechaza
+    Object.assign(process.env, { OPENPAY_WEBHOOK_USUARIO: 'openpay', OPENPAY_WEBHOOK_CLAVE: 'secreta' });
+    assert.equal((await api('POST', '/api/pagos/openpay/webhook', { body: { type: 'verification', verification_code: 'abc' } })).status, 401);
+  } finally { o.restaurar(); }
+});
+
+test('pagos: efectivo en tienda da referencia y la revisión automática detecta el pago', async () => {
+  let pagado = false;
+  const o = simularOpenpay((url, metodo) => [200, {
+    id: 'trqtienda0000001', method: 'store', status: metodo === 'GET' && pagado ? 'completed' : 'in_progress',
+    payment_method: { type: 'store', reference: '1010101234567890', barcode_url: 'https://sandbox-api.openpay.mx/barcode/1010101234567890?width=1&height=45' },
+  }]);
+  try {
+    const r = await compra('windows-11-pro-licencia-digital', 'tienda');
+    assert.equal(r.body.pago.datos.referencia, '1010101234567890');
+    assert.match(r.body.pago.datos.codigo_barras, /barcode/);
+    assert.equal((await revisarPendientes(pool)).pagados, 0);
+    pagado = true;
+    assert.equal((await revisarPendientes(pool)).pagados, 1);
+    assert.equal((await pool.query('SELECT estado FROM pedido WHERE folio = $1', [r.body.folio])).rows[0].estado, 'pagado');
+
+    // El panel también puede revisarlo a mano
+    const admin = await login('admin@test.mx');
+    const { rows: [{ id }] } = await pool.query('SELECT id FROM pedido WHERE folio = $1', [r.body.folio]);
+    const rev = await api('POST', `/api/admin/pedidos/${id}/revisar-pago`, { token: admin });
+    assert.equal(rev.status, 200);
+    assert.equal(rev.body.estado, 'pagado');
+  } finally { o.restaurar(); }
 });

@@ -6,6 +6,8 @@ const { pool } = await import('./db.js');
 const { migrar } = await import('./migraciones.js');
 const { sincronizarCuentas } = await import('./cuentas.js');
 const { iniciarAvisos } = await import('./services/avisos.js');
+const { iniciarRevisionPagos } = await import('./services/pagos.js');
+const { openpayListo, enProduccion } = await import('./services/openpay.js');
 
 if (!process.env.JWT_SECRET) {
   console.error('Falta JWT_SECRET en server/.env');
@@ -43,6 +45,8 @@ const port = Number(process.env.PORT || 3001);
 crearApp().listen(port, (error) => {
   if (!error) {
     iniciarAvisos(pool); // correo automático cuando algo se está acabando
+    iniciarRevisionPagos(pool); // confirma transferencias y pagos en tienda con Openpay
+    if (openpayListo()) console.log(`Pagos con Openpay activos (${enProduccion() ? 'PRODUCCIÓN: cobros reales' : 'sandbox de pruebas'})`);
     return console.log(`API de M&T lista en http://localhost:${port}`);
   }
   if (error.code === 'EADDRINUSE') {

@@ -50,10 +50,17 @@ CREATE TABLE pedido (
     cliente_correo    VARCHAR(150)  NOT NULL,
     cliente_telefono  VARCHAR(20),
     direccion         TEXT          NOT NULL,
-    metodo_pago       VARCHAR(30)   NOT NULL CHECK (metodo_pago IN ('tarjeta_prueba', 'transferencia', 'tienda')),
+    metodo_pago       VARCHAR(30)   NOT NULL CONSTRAINT pedido_metodo_pago_check
+                      CHECK (metodo_pago IN ('tarjeta_prueba', 'tarjeta', 'transferencia', 'tienda')),
     estado            VARCHAR(20)   NOT NULL DEFAULT 'pendiente'
                       CHECK (estado IN ('pendiente', 'pagado', 'preparacion', 'enviado', 'entregado', 'cancelado')),
     total             NUMERIC(10,2) NOT NULL DEFAULT 0,
+    -- Pago con Openpay (vacío cuando el pago es simulado)
+    pago_proveedor    VARCHAR(20),
+    pago_id           VARCHAR(60),
+    pago_estado       VARCHAR(30),
+    pago_datos        JSONB,                  -- CLABE, referencia, tarjeta (solo últimos 4)…
+    pagado_en         TIMESTAMPTZ,
     creado_en         TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
     actualizado_en    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
@@ -95,6 +102,8 @@ CREATE INDEX idx_producto_categoria ON producto(categoria_id);
 CREATE INDEX idx_producto_pieza     ON producto(pieza_3d) WHERE eliminado_en IS NULL;
 CREATE INDEX idx_pedido_estado      ON pedido(estado);
 CREATE INDEX idx_pedido_creado      ON pedido(creado_en DESC);
+CREATE UNIQUE INDEX idx_pedido_pago_id ON pedido(pago_id) WHERE pago_id IS NOT NULL;
+CREATE INDEX idx_pedido_pago_pendiente ON pedido(creado_en) WHERE pago_id IS NOT NULL AND estado = 'pendiente';
 CREATE INDEX idx_detalle_pedido     ON pedido_detalle(pedido_id);
 CREATE INDEX idx_alerta_no_leida    ON alerta_stock(creada_en DESC) WHERE leida_en IS NULL;
 CREATE INDEX idx_alerta_sin_aviso   ON alerta_stock(creada_en) WHERE notificada_en IS NULL;

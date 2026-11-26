@@ -9,6 +9,8 @@ import { HttpError, handle } from '../errors.js';
 import { ESTADOS, ESTADOS_ABIERTOS, METODOS_PAGO, PIEZAS } from '../constants.js';
 import { permitir, requiereSesion } from '../middleware/auth.js';
 import { fijarExistencias } from '../services/stock.js';
+import { ErrorPago } from '../services/openpay.js';
+import { revisarPedido } from '../services/pagos.js';
 import { bool, especificaciones, int, modeloCodigo, money, oneOf, slugify, text } from '../validate.js';
 import { SELECT_PRODUCTO, conUrls } from './catalogo.js';
 
@@ -244,6 +246,20 @@ router.patch('/pedidos/:id/estado', handle(async (req, res) => {
     return actualizado;
   });
   res.json(pedido);
+}));
+
+// POST /api/admin/pedidos/:id/revisar-pago → pregunta a Openpay si ya se pagó
+router.post('/pedidos/:id/revisar-pago', handle(async (req, res) => {
+  const id = int(req.params.id, 'id', { min: 1, max: 2_000_000_000 });
+  const { rows: [p] } = await query('SELECT id, pago_id FROM pedido WHERE id = $1', [id]);
+  if (!p) throw new HttpError(404, 'El pedido no existe.');
+  if (!p.pago_id) throw new HttpError(422, 'Este pedido no se cobró con Openpay.');
+  try {
+    res.json(await revisarPedido({ query }, p));
+  } catch (error) {
+    if (error instanceof ErrorPago) throw new HttpError(error.status, error.message);
+    throw error;
+  }
 }));
 
 /* ---------- Alertas ---------- */

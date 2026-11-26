@@ -27,6 +27,11 @@ export const ESTADOS_ABIERTOS = ['pendiente', 'pagado', 'preparacion'];
 
 export const METODOS_PAGO = {
   tarjeta_prueba: 'Tarjeta (modo de prueba)',
-  transferencia: 'Transferencia',
-  tienda: 'Pago en tienda',
+  tarjeta: 'Tarjeta de crédito o débito',
+  transferencia: 'Transferencia SPEI',
+  tienda: 'Efectivo en tienda',
 };
+
+/** Formas de pago que se aceptan según haya o no llaves de Openpay */
+export const METODOS_CON_OPENPAY = ['tarjeta', 'transferencia', 'tienda'];
+export const METODOS_SIN_OPENPAY = ['tarjeta_prueba', 'transferencia', 'tienda'];

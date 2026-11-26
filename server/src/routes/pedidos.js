@@ -1,27 +1,45 @@
 import { Router } from 'express';
 import { query, transaction } from '../db.js';
 import { HttpError, handle } from '../errors.js';
-import { METODOS_PAGO } from '../constants.js';
+import { METODOS_CON_OPENPAY, METODOS_PAGO, METODOS_SIN_OPENPAY } from '../constants.js';
+import { crearCargo, ErrorPago, openpayListo } from '../services/openpay.js';
 import { fijarExistencias } from '../services/stock.js';
 import { email, int, oneOf, text } from '../validate.js';
 
 const router = Router();
 
+// Límite de intentos de pago con tarjeta por IP: evita que alguien pruebe tarjetas robadas en la tienda
+const intentosTarjeta = new Map();
+function limitarTarjeta(req, res, next) {
+  if (req.body?.metodo_pago !== 'tarjeta') return next();
+  const ahora = Date.now();
+  const lista = (intentosTarjeta.get(req.ip) || []).filter((t) => ahora - t < 10 * 60_000);
+  if (lista.length >= 8) return res.status(429).json({ error: 'Hubo demasiados intentos de pago con tarjeta. Espera unos minutos o elige otra forma de pago.' });
+  lista.push(ahora);
+  intentosTarjeta.set(req.ip, lista);
+  next();
+}
+
 /**
  * POST /api/pedidos  → completa la compra
- * { cliente_nombre, cliente_correo, cliente_telefono, direccion, metodo_pago, items: [{ producto_id, cantidad }] }
+ * { cliente_nombre, cliente_correo, cliente_telefono, direccion, metodo_pago, items: [{ producto_id, cantidad }],
+ *   token_id?, device_session_id? }   ← los dos últimos solo para tarjeta con Openpay
  *
- * Es todo o nada: si algún producto ya no alcanza, no se guarda el pedido ni se descuenta nada.
+ * Es todo o nada: si algún producto ya no alcanza, o si Openpay rechaza la tarjeta,
+ * no se guarda el pedido ni se descuenta nada.
  */
-router.post('/pedidos', handle(async (req, res) => {
+router.post('/pedidos', limitarTarjeta, handle(async (req, res) => {
   const b = req.body;
   const datos = {
     cliente_nombre: text(b.cliente_nombre, 'nombre', { min: 3, max: 120 }),
     cliente_correo: email(b.cliente_correo),
     cliente_telefono: text(b.cliente_telefono, 'teléfono', { max: 20, required: false }),
     direccion: text(b.direccion, 'dirección de entrega', { max: 500 }),
-    metodo_pago: oneOf(b.metodo_pago, 'forma de pago', Object.keys(METODOS_PAGO)),
+    metodo_pago: oneOf(b.metodo_pago, 'forma de pago', openpayListo() ? METODOS_CON_OPENPAY : METODOS_SIN_OPENPAY),
   };
+  // Datos que genera Openpay.js en el navegador (el token sustituye a la tarjeta)
+  const token = datos.metodo_pago === 'tarjeta' ? text(b.token_id, 'token de la tarjeta', { max: 60 }) : null;
+  const dispositivo = datos.metodo_pago === 'tarjeta' ? text(b.device_session_id, 'identificador del dispositivo', { max: 255 }) : null;
 
   if (!Array.isArray(b.items) || b.items.length === 0) throw new HttpError(422, 'Tu carrito está vacío.');
   if (b.items.length > 50) throw new HttpError(422, 'El carrito tiene demasiados productos.');
@@ -50,8 +68,8 @@ router.post('/pedidos', handle(async (req, res) => {
       }
     }
 
-    // En la versión con pasarela real, el pedido queda "pagado" cuando la pasarela confirma
-    const estado = datos.metodo_pago === 'tarjeta_prueba' ? 'pagado' : 'pendiente';
+    // Simulado: la tarjeta de prueba queda pagada. Con Openpay: queda pagado cuando Openpay lo confirma
+    let estado = datos.metodo_pago === 'tarjeta_prueba' ? 'pagado' : 'pendiente';
     const { rows: [nuevo] } = await client.query(
       `INSERT INTO pedido (cliente_nombre, cliente_correo, cliente_telefono, direccion, metodo_pago, estado)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
@@ -76,7 +94,34 @@ router.post('/pedidos', handle(async (req, res) => {
     const folio = `MT-${String(nuevo.id).padStart(5, '0')}`;
     await client.query('UPDATE pedido SET folio = $1, total = $2 WHERE id = $3', [folio, total, nuevo.id]);
 
-    return { folio, estado, total, metodo_pago: datos.metodo_pago, cliente_nombre: datos.cliente_nombre, detalle };
+    // Cobro con Openpay. Si falla, se lanza el error y la transacción deshace todo (pedido y existencias).
+    let pago = null;
+    if (openpayListo()) {
+      try {
+        const cargo = await crearCargo({
+          metodo: datos.metodo_pago,
+          monto: total,
+          folio,
+          descripcion: `Tienda M&T · Pedido ${folio}`,
+          comprador: { nombre: datos.cliente_nombre, correo: datos.cliente_correo, telefono: datos.cliente_telefono },
+          token,
+          dispositivo,
+        });
+        if (cargo.pagado) estado = 'pagado';
+        await client.query(
+          `UPDATE pedido SET estado = $2, pago_proveedor = 'openpay', pago_id = $3, pago_estado = $4, pago_datos = $5,
+                  pagado_en = CASE WHEN $6 THEN NOW() END
+           WHERE id = $1`,
+          [nuevo.id, estado, cargo.id, cargo.estado, JSON.stringify(cargo.datos), cargo.pagado],
+        );
+        pago = { proveedor: 'openpay', estado: cargo.estado, datos: cargo.datos };
+      } catch (error) {
+        if (error instanceof ErrorPago) throw new HttpError(error.status, error.message, error.codigo ? { codigo: error.codigo } : undefined);
+        throw error;
+      }
+    }
+
+    return { folio, estado, total, metodo_pago: datos.metodo_pago, cliente_nombre: datos.cliente_nombre, detalle, pago };
   });
 
   res.status(201).json(pedido);
@@ -102,7 +147,7 @@ router.post('/pedidos/seguimiento', limitar, handle(async (req, res) => {
   const folio = text(req.body.folio, 'folio', { max: 20 }).toUpperCase();
   const correo = email(req.body.correo);
   const { rows: [p] } = await query(
-    `SELECT id, folio, estado, total, metodo_pago, creado_en, actualizado_en
+    `SELECT id, folio, estado, total, metodo_pago, creado_en, actualizado_en, pago_estado, pago_datos
      FROM pedido WHERE folio = $1 AND lower(cliente_correo) = $2`,
     [folio, correo],
   );
