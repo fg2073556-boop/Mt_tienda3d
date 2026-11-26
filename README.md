@@ -121,7 +121,8 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 
 - **Catálogo:** la tarjeta muestra la imagen 3D de la pieza (si el producto no tiene foto).
 - **Ficha del producto:** visor para girar, acercar y desarmar la pieza, con su tabla de especificaciones.
-- **Galería:** http://localhost:5173/galeria-3d muestra todas las piezas (botón *Piezas 3D* de la barra).
+- **Showroom de la página principal:** la PC Fénix, el escritorio, el monitor, el teclado y la silla están hechos con estas mismas piezas; cada una se puede tocar.
+- **Galería interna:** http://localhost:5173/galeria-3d muestra todas las piezas (no aparece en el menú de la tienda; se abre desde el panel).
 
 Cómo están hechas y cómo agregar una nueva: [docs/modelos-3d.md](docs/modelos-3d.md).
 
