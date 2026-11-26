@@ -82,23 +82,25 @@ export default function TiendaLayout() {
 
   return (
     <AvisoProvider>
-      <header className="barra">
-        <Link to="/" className="logo">M<b>&amp;</b>T</Link>
-        <NavLink to="/" end className="btn btn-nav">Tienda</NavLink>
-        <NavLink to="/envios" className="btn btn-nav">Envíos</NavLink>
-        {usuario && !esPersonal(usuario) && <NavLink to="/mis-pedidos" className="btn btn-nav">Mis pedidos</NavLink>}
-        {usuario && esPersonal(usuario) && <NavLink to="/panel" className="btn btn-nav">Panel</NavLink>}
-        {!cargando && (usuario
-          ? <MenuCuenta />
-          : <NavLink to="/ingresar" state={{ desde: pathname }} className="btn btn-nav btn-entrar">Iniciar sesión</NavLink>)}
-        <NavLink to="/carrito" className="btn btn-mt">
-          Carrito <span className="badge text-bg-dark ms-1">{cuenta}</span>
-        </NavLink>
-      </header>
-      <Outlet />
-      <footer className="pie">
-        M&amp;T · Soluciones integrales de PC para estudiantes, ingenieros y empresas de la región. Reto COM-1.
-      </footer>
+      <div className="tienda-marco">
+        <header className="barra">
+          <Link to="/" className="logo">M<b>&amp;</b>T</Link>
+          <NavLink to="/" end className="btn btn-nav">Tienda</NavLink>
+          <NavLink to="/envios" className="btn btn-nav">Envíos</NavLink>
+          {usuario && !esPersonal(usuario) && <NavLink to="/mis-pedidos" className="btn btn-nav">Mis pedidos</NavLink>}
+          {usuario && esPersonal(usuario) && <NavLink to="/panel" className="btn btn-nav">Panel</NavLink>}
+          {!cargando && (usuario
+            ? <MenuCuenta />
+            : <NavLink to="/ingresar" state={{ desde: pathname }} className="btn btn-nav btn-entrar">Iniciar sesión</NavLink>)}
+          <NavLink to="/carrito" className="btn btn-mt">
+            Carrito <span className="badge text-bg-dark ms-1">{cuenta}</span>
+          </NavLink>
+        </header>
+        <main><Outlet /></main>
+        <footer className="pie">
+          M&amp;T · Soluciones integrales de PC para estudiantes, ingenieros y empresas de la región. Reto COM-1.
+        </footer>
+      </div>
     </AvisoProvider>
   );
 }

@@ -382,3 +382,7 @@ h1 { font-size: clamp(30px, 4.4vw, 50px); letter-spacing: -0.02em; line-height: 
   .mis-pedido-cabeza { grid-template-columns: 1fr auto; }
   .mis-pedido-cabeza .precio { grid-column: 1 / -1; }
 }
+
+/* El pie de página siempre al fondo, aunque la página sea corta */
+.tienda-marco { min-height: 100vh; display: flex; flex-direction: column; }
+.tienda-marco > main { flex: 1; }
