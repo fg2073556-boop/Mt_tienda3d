@@ -100,6 +100,9 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 | `POST /api/pedidos` | Público | Compra todo-o-nada; descuenta existencias |
 | `POST /api/asesor` | Público | Recomendación con Gemini (o reglas sin llave) |
 | `POST /api/pedidos/seguimiento` | Público | Estado del pedido con folio y correo |
+| `GET /api/envios/cotizar?cp=` | Público | Municipio, colonias, zona, costo, días y ruta |
+| `GET /api/envios/zonas` | Público | Zonas y los 217 municipios para el mapa |
+| `PUT /api/admin/envios/zonas/:id` · `PATCH /api/admin/envios/municipios/:cve` | Administrador | Costo y días por zona; zona de cada municipio |
 | `GET /api/pagos/config` | Público | Si hay Openpay y su llave pública |
 | `POST /api/pagos/openpay/webhook` | Openpay | Avisa pagos; se confirman consultando a Openpay |
 | `POST /api/auth/login` | Público | Devuelve el token JWT |
@@ -196,6 +199,24 @@ OPENPAY_PRODUCCION=false
 
 Sin llaves, la tienda sigue con el pago simulado. Nunca subas la llave privada (`sk_…`) a GitHub.
 
+## Envíos dentro de Puebla
+
+Los paquetes salen de la tienda en **Tepeaca**. Con el **código postal** la tienda sabe el municipio (catálogo SEPOMEX) y la zona:
+
+| Zona | Distancia desde Tepeaca | Costo | Entrega |
+|---|---|---|---|
+| Zona 1 · Local | hasta 35 km (31 municipios, incluye la ciudad de Puebla) | $49 | 1–2 días hábiles |
+| Zona 2 · Regional | hasta 80 km (73 municipios: Atlixco, Cholula, Tehuacán…) | $89 | 2–3 días hábiles |
+| Zona 3 · Estatal | hasta 120 km (77 municipios: Teziutlán, Zacatlán, Izúcar…) | $129 | 3–5 días hábiles |
+| Sin cobertura | más de 120 km (36 municipios de la Sierra Norte y la Mixteca) u otro estado | — | — |
+
+- **Tienda → Envíos** (`/envios`): mapa de Puebla con las zonas, buscador por código postal y lista de municipios.
+- **Pago:** el cliente escribe su CP, elige su colonia y ve costo, días y la ruta *Tepeaca → destino*. Si no llegamos, no puede pagar. El envío se suma al total (y al cobro de Openpay). Las licencias de software no pagan envío.
+- **Mi pedido:** muestra el envío y la ruta en el mapa.
+- **Panel → Envíos** (administrador): cambiar costo y días de cada zona (0 = gratis) y la zona de cada municipio tocándolo en el mapa.
+
+Datos: códigos postales de [IcaliaLabs/sepomex](https://github.com/IcaliaLabs/sepomex) y municipios de [PhantomInsights/mexico-geojson](https://github.com/PhantomInsights/mexico-geojson), ambos MIT. Cómo regenerarlos: `datos/fuentes/LEEME.md`.
+
 ## Pruebas
 
 ```bash
@@ -204,7 +225,7 @@ cd server
 DB_NAME=mt_tienda_test npm test              # PowerShell: $env:DB_NAME="mt_tienda_test"; npm test
 ```
 
-Son 28 pruebas: cuentas, catálogo, compra, stock, roles, pedidos, seguimiento, IA, reposición, WhatsApp, fotos y pagos con Openpay. Gemini, el correo, WhatsApp y Openpay se simulan en las pruebas, así que no gastan cuota ni mandan correos.
+Son 31 pruebas: cuentas, catálogo, compra, stock, roles, pedidos, seguimiento, IA, reposición, WhatsApp, fotos, pagos con Openpay y envíos. Gemini, el correo, WhatsApp y Openpay se simulan en las pruebas, así que no gastan cuota ni mandan correos.
 
 ## Usar la IA (Gemini)
 
