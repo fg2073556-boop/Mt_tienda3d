@@ -107,12 +107,19 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 | `PATCH /api/admin/pedidos/:id/estado` | Ambos roles | Cambiar estado; cancelar regresa piezas |
 | `POST /api/admin/ia/descripcion` | Administrador | Redacta la descripción de un producto con Gemini |
 | `POST /api/admin/ia/resumir-ficha` | Administrador | Explica una ficha técnica en PDF con Gemini |
+| `GET /api/admin/reposicion` | Ambos roles | Inventario con estado (agotado, por acabarse, sano) y cantidad sugerida |
+| `PUT /api/admin/reposicion/ajuste` | Administrador | Correo(s) de aviso, proveedor y su WhatsApp |
+| `PATCH /api/admin/reposicion/productos/:id/minimo` | Ambos roles | Cambiar el mínimo de un producto |
+| `POST /api/admin/reposicion/correo` | Ambos roles | Mandar ahora el reporte de lo que falta |
+| `POST /api/admin/reposicion/mensaje` | Ambos roles | Borrador de WhatsApp para el proveedor (Gemini o mensaje base) |
+| `POST /api/admin/reposicion/reponer` | Ambos roles | Registrar la llegada de varios productos a la vez |
 
 ## Reglas de negocio
 
 - La compra es todo o nada: si un producto ya no alcanza al pagar, no se guarda el pedido.
 - Al pagar se descuentan existencias. Si un producto llega a 0 o baja del mínimo, se crea una alerta en el panel.
 - Al cancelar un pedido, las piezas regresan al inventario.
+- Cada minuto el servidor junta las alertas nuevas y manda **un solo correo** con todo lo que falta (no un correo por producto). Las alertas de más de 24 horas que nunca se mandaron ya no se envían.
 - Eliminar un producto lo oculta (borrado suave): los pedidos anteriores conservan nombre y precio.
 
 ## Modelos 3D
@@ -128,6 +135,25 @@ Cómo están hechas y cómo agregar una nueva: [docs/modelos-3d.md](docs/modelos
 
 **Modelos .glb.** En el panel, edita un producto, elige su **pieza en la escena 3D** y sube su `.glb`. La escena reemplaza la pieza dibujada por ese modelo, y la ficha del producto lo muestra con realidad aumentada en celulares compatibles. Para el gabinete sube el modelo **vacío por dentro**. Los prompts para generarlos están en `docs/prompts-3d.md`.
 
+## Reposición y avisos
+
+En el panel, **Reposición** muestra lo que se está acabando, cuánto pedir (lo que falta para llegar al doble del mínimo), el mínimo de cada producto (editable) y el pedido al proveedor:
+
+1. Marca los productos y ajusta las cantidades.
+2. **Redactar mensaje con Gemini** arma el pedido para el proveedor; lo puedes editar y abrir en WhatsApp con el texto listo (enlace `wa.me`, sin costo).
+3. Cuando llega la mercancía, **Ya llegó: sumar al inventario** suma todo de una vez.
+
+Para que salgan los correos, pon en `server/.env` los datos del servidor de correo (con Gmail, una *contraseña de aplicación*):
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=tu-cuenta@gmail.com
+SMTP_PASS=contraseña-de-aplicacion
+```
+
+y en el panel, en **Ajustes de avisos**, el correo que recibe los avisos. Las claves nunca van en el código.
+
 ## Pruebas
 
 ```bash
@@ -136,7 +162,7 @@ cd server
 DB_NAME=mt_tienda_test npm test              # PowerShell: $env:DB_NAME="mt_tienda_test"; npm test
 ```
 
-Son 13 pruebas: catálogo, compra, stock, roles, pedidos, seguimiento e IA. Gemini se simula en las pruebas, así que no gastan cuota.
+Son 20 pruebas: cuentas, catálogo, compra, stock, roles, pedidos, seguimiento, IA y reposición. Gemini y el correo se simulan en las pruebas, así que no gastan cuota ni mandan correos.
 
 ## Usar la IA (Gemini)
 
