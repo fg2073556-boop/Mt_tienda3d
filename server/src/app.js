@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js';
 import catalogoRoutes from './routes/catalogo.js';
 import pedidosRoutes from './routes/pedidos.js';
 import iaRoutes from './routes/ia.js';
+import reposicionRoutes from './routes/reposicion.js';
 import { HttpError } from './errors.js';
 
 /** Crea la aplicación Express (separada de index.js para poder probarla) */
@@ -28,6 +29,7 @@ export function crearApp() {
   app.use('/api', pedidosRoutes);
   app.use('/api', asesorRoutes);
   app.use('/api/admin/ia', iaRoutes);
+  app.use('/api/admin/reposicion', reposicionRoutes);
   app.use('/api/admin', adminRoutes);
 
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Esa ruta de la API no existe.')));

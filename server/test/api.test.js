@@ -23,6 +23,7 @@ if (!String(process.env.DB_NAME).endsWith('_test')) {
 const { pool } = await import('../src/db.js');
 const { crearApp } = await import('../src/app.js');
 const { sincronizarCuentas } = await import('../src/cuentas.js');
+const { revisarAvisos, usarTransporte } = await import('../src/services/avisos.js');
 
 let server;
 let base;
@@ -281,4 +282,100 @@ test('seguimiento: el cliente consulta su pedido solo con folio y correo correct
   assert.equal(ok.body.id, undefined);
   const otro = await api('POST', '/api/pedidos/seguimiento', { body: { folio: 'MT-00004', correo: 'otra@ejemplo.com' } });
   assert.equal(otro.status, 404);
+});
+
+test('reposición: lista lo que se acaba primero y solo el administrador cambia los ajustes', async () => {
+  const vendedor = await login('vende@test.mx');
+  const r = await api('GET', '/api/admin/reposicion', { token: vendedor });
+  assert.equal(r.status, 200);
+  const estados = r.body.productos.map((p) => p.estado);
+  assert.ok(estados.indexOf('ok') > -1);
+  assert.equal(estados.slice(0, estados.indexOf('ok')).every((e) => e !== 'ok'), true, 'lo que falta va arriba');
+  assert.equal(estados.slice(estados.indexOf('ok')).every((e) => e === 'ok'), true);
+  for (const p of r.body.productos.filter((x) => x.estado !== 'ok')) assert.equal(p.sugerido, Math.max(p.stock_minimo * 2 - p.existencias, 1));
+
+  assert.equal((await api('PUT', '/api/admin/reposicion/ajuste', { token: vendedor, body: { correo_destino: 'a@b.mx' } })).status, 403);
+
+  const admin = await login('admin@test.mx');
+  const malo = await api('PUT', '/api/admin/reposicion/ajuste', { token: admin, body: { correo_destino: 'no-es-correo' } });
+  assert.equal(malo.status, 422);
+  const ok = await api('PUT', '/api/admin/reposicion/ajuste', {
+    token: admin,
+    body: { correo_destino: 'Compras@MT.mx, gerencia@mt.mx', aviso_automatico: true, proveedor_nombre: 'Distribuidora Centro', proveedor_whatsapp: '222 123 4567' },
+  });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.correo_destino, 'compras@mt.mx, gerencia@mt.mx');
+  assert.equal(ok.body.proveedor_whatsapp, '522221234567');
+});
+
+test('reposición: cambia el mínimo y repone varios productos a la vez', async () => {
+  const vendedor = await login('vende@test.mx');
+  const id = await idDe('teclado-mecanico-mouse');
+  const m = await api('PATCH', `/api/admin/reposicion/productos/${id}/minimo`, { token: vendedor, body: { stock_minimo: 7 } });
+  assert.equal(m.status, 200);
+  assert.equal(m.body.stock_minimo, 7);
+  const antes = await existencias('teclado-mecanico-mouse');
+  const r = await api('POST', '/api/admin/reposicion/reponer', { token: vendedor, body: { items: [{ id, cantidad: 4 }] } });
+  assert.equal(r.status, 200);
+  assert.equal(await existencias('teclado-mecanico-mouse'), antes + 4);
+});
+
+test('reposición: manda el reporte y el aviso automático junta las alertas en un correo', async () => {
+  const enviados = [];
+  usarTransporte({ sendMail: async (m) => { enviados.push(m); return { messageId: 'prueba' }; } });
+  try {
+    const admin = await login('admin@test.mx');
+    await pool.query('UPDATE alerta_stock SET notificada_en = NOW()');
+
+    const r = await api('POST', '/api/admin/reposicion/correo', { token: admin, body: {} });
+    assert.equal(r.status, 200);
+    assert.equal(enviados[0].to, 'compras@mt.mx, gerencia@mt.mx');
+    assert.match(enviados[0].subject, /Reporte de reposición/);
+    assert.match(enviados[0].html, /\/panel\/reposicion/);
+
+    // Dos productos se agotan → un solo correo con las dos alertas
+    for (const slug of ['teclado-mecanico-mouse', 'monitor-27-qhd-165-hz']) {
+      const id = await idDe(slug);
+      await api('PATCH', `/api/admin/productos/${id}/existencias`, { token: admin, body: { delta: -(await existencias(slug)) } });
+    }
+    const a = await revisarAvisos(pool);
+    assert.equal(a.enviado, true);
+    assert.equal(a.alertas, 2);
+    assert.equal(enviados.length, 2);
+    assert.match(enviados[1].subject, /Se agotaron/);
+    assert.match(enviados[1].text, /Se agotó: Teclado/);
+    assert.equal((await revisarAvisos(pool)).motivo, 'sin alertas');
+
+    // Apagado: no manda nada
+    await pool.query('UPDATE ajuste_reposicion SET aviso_automatico = FALSE');
+    assert.equal((await revisarAvisos(pool)).motivo, 'apagado');
+    await pool.query('UPDATE ajuste_reposicion SET aviso_automatico = TRUE');
+  } finally { usarTransporte(null); }
+});
+
+test('reposición: borrador de WhatsApp para el proveedor con y sin Gemini', async () => {
+  const admin = await login('admin@test.mx');
+  const id = await idDe('teclado-mecanico-mouse');
+  delete process.env.GEMINI_API_KEY;
+  const base = await api('POST', '/api/admin/reposicion/mensaje', { token: admin, body: { items: [{ id, cantidad: 6 }] } });
+  assert.equal(base.status, 200);
+  assert.equal(base.body.conIA, false);
+  assert.match(base.body.mensaje, /Hola Distribuidora Centro/);
+  assert.match(base.body.mensaje, /6 × Teclado/);
+  assert.match(base.body.url, /^https:\/\/wa\.me\/522221234567\?text=/);
+
+  process.env.GEMINI_API_KEY = 'llave-falsa';
+  const nombre = (await pool.query('SELECT nombre FROM producto WHERE id = $1', [id])).rows[0].nombre;
+  let g = simularGemini({ mensaje: `Hola, buen día. Les pedimos:\n• 6 × ${nombre}\nTienda M&T` });
+  try {
+    const r = await api('POST', '/api/admin/reposicion/mensaje', { token: admin, body: { items: [{ id, cantidad: 6 }] } });
+    assert.equal(r.body.conIA, true);
+    assert.match(g.llamadas[0].contents[0].parts[0].text, /Distribuidora Centro/);
+  } finally { g.restaurar(); }
+  g = simularGemini({ mensaje: 'Hola, mándenos unos teclados.' });
+  try {
+    const r = await api('POST', '/api/admin/reposicion/mensaje', { token: admin, body: { items: [{ id, cantidad: 6 }] } });
+    assert.equal(r.body.conIA, false);
+    assert.match(r.body.aviso, /mensaje base/);
+  } finally { g.restaurar(); delete process.env.GEMINI_API_KEY; }
 });
