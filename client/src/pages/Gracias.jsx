@@ -30,7 +30,7 @@ export default function Gracias() {
         )}
         <div className="d-flex gap-2 mt-3 flex-wrap">
           <Link to="/" className="btn btn-mt">Volver a la tienda</Link>
-          <Link to="/seguimiento" state={{ folio }} className="btn btn-outline-secondary">Consultar el estado después</Link>
+          <Link to="/mis-pedidos" className="btn btn-outline-secondary">Ver mis pedidos</Link>
         </div>
       </div>
     </section>

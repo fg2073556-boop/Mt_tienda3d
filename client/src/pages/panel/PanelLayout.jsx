@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { AvisoProvider } from '../../components/Aviso.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useCart } from '../../context/CartContext.jsx';
 
 /** Opciones del menú lateral y qué roles las ven */
 const MENU = [
@@ -15,6 +16,7 @@ const MENU = [
 
 export default function PanelLayout() {
   const { usuario, rol, logout } = useAuth();
+  const { vaciar } = useCart();
   const navigate = useNavigate();
 
   return (
@@ -32,7 +34,7 @@ export default function PanelLayout() {
             ))}
             <Link to="/" className="nav-link">Ver tienda</Link>
           </nav>
-          <button type="button" className="btn btn-outline-light btn-sm mt-auto" onClick={() => { logout(); navigate('/'); }}>Cerrar sesión</button>
+          <button type="button" className="btn btn-outline-light btn-sm mt-auto" onClick={() => { logout(); vaciar(); navigate('/'); }}>Cerrar sesión</button>
         </aside>
         <main className="contenido-panel">
           <Suspense fallback={<p className="text-body-secondary">Cargando…</p>}>

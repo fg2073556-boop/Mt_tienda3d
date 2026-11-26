@@ -6,8 +6,7 @@ import { NOMBRES } from '../lib/piezas.js';
 const Escena3D = lazy(() => import('../components/Escena3D.jsx'));
 import TarjetaProducto from '../components/TarjetaProducto.jsx';
 import Insignia from '../components/Insignia.jsx';
-import { useAviso } from '../components/Aviso.jsx';
-import { useCart } from '../context/CartContext.jsx';
+import { useAgregar } from '../lib/useAgregar.js';
 import { api } from '../lib/api.js';
 import { dinero } from '../lib/formato.js';
 
@@ -81,8 +80,7 @@ export default function Tienda() {
 }
 
 function Ficha({ pieza, producto, disponibles, onElegir }) {
-  const { agregar } = useCart();
-  const avisar = useAviso();
+  const agregar = useAgregar();
   const chips = (
     <div className="d-flex flex-wrap gap-1">
       {Object.keys(NOMBRES).filter((k) => disponibles[k]).map((k) => (
@@ -109,7 +107,7 @@ function Ficha({ pieza, producto, disponibles, onElegir }) {
       <h3>{producto.nombre}</h3>
       <p>{producto.descripcion}</p>
       <div className="d-flex justify-content-between align-items-center"><span className="precio grande">{dinero(producto.precio)}</span><Insignia producto={producto} /></div>
-      <button type="button" className="btn btn-mt" disabled={agotado} onClick={() => { const e = agregar(producto); avisar(e || `Agregado: ${producto.nombre}`, e ? 'error' : 'ok'); }}>
+      <button type="button" className="btn btn-mt" disabled={agotado} onClick={() => agregar(producto)}>
         {agotado ? 'Agotado' : 'Agregar al carrito'}
       </button>
       <Link to={`/producto/${producto.slug}`} className="link-menta">Ver ficha completa</Link>
@@ -123,8 +121,7 @@ function Asesor() {
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
   const [resultado, setResultado] = useState(null);
-  const { agregar } = useCart();
-  const avisar = useAviso();
+  const agregar = useAgregar();
 
   const enviar = async (e) => {
     e.preventDefault();
@@ -139,10 +136,7 @@ function Asesor() {
     }
   };
 
-  const agregarTodo = () => {
-    const fallas = resultado.productos.map((p) => agregar(p)).filter(Boolean);
-    avisar(fallas.length ? fallas.join(' ') : 'Se agregó la solución completa al carrito.', fallas.length ? 'error' : 'ok');
-  };
+  const agregarTodo = () => agregar(resultado.productos);
 
   return (
     <section className="banda bg-body-tertiary border-top border-bottom">

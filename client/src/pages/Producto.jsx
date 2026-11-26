@@ -2,10 +2,9 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Icono from '../components/Icono.jsx';
 import Insignia from '../components/Insignia.jsx';
-import { useAviso } from '../components/Aviso.jsx';
-import { useCart } from '../context/CartContext.jsx';
 import { api } from '../lib/api.js';
 import { dinero } from '../lib/formato.js';
+import { useAgregar } from '../lib/useAgregar.js';
 
 const VisorPieza = lazy(() => import('../components/VisorPieza.jsx'));
 
@@ -25,8 +24,7 @@ export default function Producto() {
   const [error, setError] = useState('');
   const [cantidad, setCantidad] = useState(1);
   const [verFoto, setVerFoto] = useState(false);
-  const { agregar } = useCart();
-  const avisar = useAviso();
+  const agregar = useAgregar();
 
   useEffect(() => {
     setProducto(null);
@@ -87,7 +85,7 @@ export default function Producto() {
                   disabled={agotado} onChange={(e) => setCantidad(Math.max(1, Number(e.target.value) || 1))} />
               </label>
               <button type="button" className="btn btn-mt" disabled={agotado}
-                onClick={() => { const e = agregar(producto, cantidad); avisar(e || `Agregado: ${producto.nombre}`, e ? 'error' : 'ok'); }}>
+                onClick={() => agregar(producto, cantidad)}>
                 {agotado ? 'Agotado' : 'Agregar al carrito'}
               </button>
             </div>

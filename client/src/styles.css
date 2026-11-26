@@ -355,3 +355,30 @@ h1 { font-size: clamp(30px, 4.4vw, 50px); letter-spacing: -0.02em; line-height: 
 .seguimiento-mapa { border: 1px solid #d8e2e0; border-radius: 14px; padding: 12px; display: grid; gap: 6px; }
 @media (max-width: 1000px) { .envios-rejilla { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) { .envio-cifras { grid-template-columns: 1fr 1fr; } }
+
+/* Cuenta: menú del encabezado e inicio de sesión único */
+.menu-cuenta { position: relative; }
+.cuenta-boton { gap: 8px; padding-left: 6px; }
+.cuenta-avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--mt-escenario); color: var(--mt-menta); font: 700 12px 'Space Grotesk', Inter, sans-serif; }
+.cuenta-menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 240px; background: #fff; border: 1px solid #d8e2e0; border-radius: 14px; box-shadow: 0 18px 40px -20px rgba(6, 16, 24, .45); padding: 6px; display: grid; z-index: 40; }
+.cuenta-quien { display: grid; padding: 10px 12px; border-bottom: 1px solid #eef3f1; margin-bottom: 4px; }
+.cuenta-quien span { font-size: 13px; color: #53666c; overflow: hidden; text-overflow: ellipsis; }
+.cuenta-menu a, .cuenta-menu button { text-align: left; padding: 9px 12px; border-radius: 9px; color: #0c1b21; text-decoration: none; background: none; border: 0; font-size: 15px; }
+.cuenta-menu a:hover, .cuenta-menu button:hover { background: var(--mt-suave); }
+.cuenta-menu button { color: #a11d2f; }
+.btn-entrar { border-color: #d0dbd8; background: #fff; color: #0c1b21; font-weight: 600; }
+.acceso-pestanas { display: grid; grid-template-columns: 1fr 1fr; background: #eef3f1; border-radius: 12px; padding: 4px; margin-bottom: 18px; }
+.acceso-pestanas button { border: 0; background: none; border-radius: 9px; padding: 9px 10px; font-weight: 600; color: #53666c; }
+.acceso-pestanas button.activa { background: #fff; color: #0c1b21; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.acceso-pendiente { display: flex; gap: 10px; align-items: flex-start; background: #f3fbf7; border: 1px solid #bfe8d3; border-radius: 12px; padding: 10px 12px; font-size: 14px; margin-bottom: 4px; }
+.acceso-pendiente svg { width: 20px; height: 20px; flex: none; color: var(--mt-menta-osc); margin-top: 1px; }
+.acceso-cambio { text-align: center; font-size: 14px; margin: 14px 0 0; color: #53666c; }
+.mis-pedido { border-radius: 16px; overflow: hidden; }
+.mis-pedido-cabeza { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; width: 100%; text-align: left; border: 0; background: #fff; padding: 16px 18px; }
+.mis-pedido-cabeza small { display: block; color: #53666c; }
+.mis-pedido.abierto .mis-pedido-cabeza { background: #f8fbfa; }
+@media (max-width: 640px) {
+  .cuenta-nombre { display: none; }
+  .mis-pedido-cabeza { grid-template-columns: 1fr auto; }
+  .mis-pedido-cabeza .precio { grid-column: 1 / -1; }
+}

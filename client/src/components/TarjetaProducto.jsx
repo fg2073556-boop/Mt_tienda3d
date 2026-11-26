@@ -1,24 +1,19 @@
 import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useCart } from '../context/CartContext.jsx';
 import { dinero } from '../lib/formato.js';
-import { useAviso } from './Aviso.jsx';
+import { useAgregar } from '../lib/useAgregar.js';
 import Icono from './Icono.jsx';
 import Insignia from './Insignia.jsx';
 import Miniatura3D from './Miniatura3D.jsx';
 import Vista3DModal from './Vista3DModal.jsx';
 
 export default function TarjetaProducto({ producto, onVer3D }) {
-  const { agregar } = useCart();
-  const avisar = useAviso();
+  const agregar = useAgregar();
   const agotado = producto.existencias <= 0;
   const [ver3D, setVer3D] = useState(false);
   const cerrar3D = useCallback(() => setVer3D(false), []);
 
-  const alAgregar = () => {
-    const error = agregar(producto);
-    avisar(error || `Agregado: ${producto.nombre}`, error ? 'error' : 'ok');
-  };
+  const alAgregar = () => agregar(producto);
 
   return (
     <article className="card tarjeta h-100">

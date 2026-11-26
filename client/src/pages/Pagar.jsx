@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.jsx';
 import { useCart } from '../context/CartContext.jsx';
 import { api } from '../lib/api.js';
 import ResultadoEnvio from '../components/ResultadoEnvio.jsx';
@@ -28,7 +29,9 @@ function opciones(openpay) {
 
 export default function Pagar() {
   const { items, total: subtotal, vaciar, cambiar, conEnvio } = useCart();
-  const [datos, setDatos] = useState(VACIO);
+  const { usuario } = useAuth();
+  // Los datos de la cuenta ya vienen escritos; se pueden cambiar (por ejemplo, si recibe otra persona)
+  const [datos, setDatos] = useState(() => ({ ...VACIO, cliente_nombre: usuario?.nombre || '', cliente_correo: usuario?.correo || '', cliente_telefono: usuario?.telefono || '' }));
   const [config, setConfig] = useState(null); // { activo, merchantId, publicKey, sandbox }
   const [metodo, setMetodo] = useState('');
   const [tarjeta, setTarjeta] = useState(TARJETA_VACIA);

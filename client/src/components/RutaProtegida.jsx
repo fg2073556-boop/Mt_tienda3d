@@ -7,8 +7,10 @@ export default function RutaProtegida({ roles, children }) {
   const location = useLocation();
 
   if (cargando) return <p className="p-4 text-body-secondary">Cargando…</p>;
-  if (!usuario) return <Navigate to="/login" replace state={{ desde: location.pathname }} />;
+  if (!usuario) return <Navigate to="/ingresar" replace state={{ desde: location.pathname }} />;
   if (roles && !roles.includes(usuario.rol)) {
+    // Un cliente que llega al panel regresa a la tienda
+    if (usuario.rol === 'cliente') return <Navigate to="/" replace />;
     return <div className="alert alert-warning m-4">Tu rol ({usuario.rol}) no tiene acceso a esta sección.</div>;
   }
   return children;
