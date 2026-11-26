@@ -2,7 +2,7 @@
  * Envío automático de WhatsApp. Se elige con WHATSAPP_MODO en server/.env:
  *
  *  - callmebot: gratis y en 5 minutos. El número que recibe tiene que activar el bot una vez
- *    (mandarle "I allow callmebot to send me messages") y la llave que responde va en
+ *    (mandarle "I allow callmebot to send me messages" al número que indica callmebot.com) y la llave que responde va en
  *    WHATSAPP_CALLMEBOT_APIKEY. Ideal cuando quien recibe eres tú o tu equipo.
  *  - meta: API oficial de WhatsApp Business (Cloud API). Necesita WHATSAPP_TOKEN y
  *    WHATSAPP_PHONE_ID; para escribir a alguien que no te ha escrito en las últimas 24 h
