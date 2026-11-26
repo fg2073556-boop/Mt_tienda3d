@@ -1,4 +1,5 @@
 import { Link, useLocation, useParams } from 'react-router-dom';
+import InstruccionesPago from '../components/InstruccionesPago.jsx';
 import { dinero, ESTADOS, METODOS_PAGO } from '../lib/formato.js';
 
 export default function Gracias() {
@@ -8,9 +9,10 @@ export default function Gracias() {
   return (
     <section className="banda">
       <div className="contenedor" style={{ maxWidth: 720 }}>
-        {pedido && <span className="insignia ok">{ESTADOS[pedido.estado]}</span>}
+        {pedido && <span className={`insignia ${pedido.estado === 'pagado' ? 'ok' : 'bajo'}`}>{pedido.estado === 'pendiente' ? 'Pendiente de pago' : ESTADOS[pedido.estado]}</span>}
         <h1 className="h2 mt-2">¡Gracias{pedido ? `, ${pedido.cliente_nombre}` : ''}!</h1>
         <p className="text-body-secondary">Tu pedido <b>{folio}</b> quedó registrado. Guarda este folio para dar seguimiento a tu compra.</p>
+        {pedido && <div className="mb-3"><InstruccionesPago metodo={pedido.metodo_pago} estado={pedido.estado} total={pedido.total} pago={pedido.pago} /></div>}
         {pedido && (
           <div className="card card-body">
             <ul className="list-unstyled mb-2">

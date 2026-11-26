@@ -14,6 +14,7 @@ export const ESTADOS = {
 
 export const METODOS_PAGO = {
   tarjeta_prueba: 'Tarjeta (modo de prueba)',
-  transferencia: 'Transferencia',
-  tienda: 'Pago en tienda',
+  tarjeta: 'Tarjeta de crédito o débito',
+  transferencia: 'Transferencia SPEI',
+  tienda: 'Efectivo en tienda',
 };

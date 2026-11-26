@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import InstruccionesPago from '../components/InstruccionesPago.jsx';
 import { api } from '../lib/api.js';
 import { dinero, ESTADOS, fecha, METODOS_PAGO } from '../lib/formato.js';
 
@@ -70,6 +71,9 @@ export default function Seguimiento() {
               ))}
             </ul>
             <div className="d-flex justify-content-between total"><span>Total</span><span>{dinero(pedido.total)}</span></div>
+            {pedido.estado !== 'cancelado' && pedido.pago_datos && (
+              <InstruccionesPago metodo={pedido.metodo_pago} estado={pedido.estado} total={pedido.total} pago={{ estado: pedido.pago_estado, datos: pedido.pago_datos }} />
+            )}
             <p className="small text-body-secondary mb-0">Forma de pago: {METODOS_PAGO[pedido.metodo_pago]} · Última actualización: {fecha(pedido.actualizado_en)}</p>
           </div>
         )}

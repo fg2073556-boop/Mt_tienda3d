@@ -4,6 +4,8 @@ import { useAviso } from '../../components/Aviso.jsx';
 import { api } from '../../lib/api.js';
 import { dinero, ESTADOS, fecha, METODOS_PAGO } from '../../lib/formato.js';
 
+const ESTADO_PAGO = { completed: 'Pagado', in_progress: 'Esperando pago', cancelled: 'Vencido o cancelado', failed: 'Falló', refunded: 'Reembolsado', charge_pending: 'Pendiente' };
+
 export default function PedidoDetalle() {
   const { id } = useParams();
   const [pedido, setPedido] = useState(null);
@@ -13,6 +15,16 @@ export default function PedidoDetalle() {
 
   const cargar = useCallback(() => api(`/admin/pedidos/${id}`).then((p) => { setPedido(p); setEstado(p.estado); }).catch((e) => setError(e.message)), [id]);
   useEffect(() => { cargar(); }, [cargar]);
+
+  const [revisando, setRevisando] = useState(false);
+  const revisarPago = async () => {
+    setRevisando(true);
+    try {
+      const r = await api(`/admin/pedidos/${id}/revisar-pago`, { method: 'POST' });
+      avisar(r?.estado === 'pagado' ? `${pedido.folio}: pago confirmado` : `Openpay: el pago sigue ${r?.pago_estado === 'in_progress' ? 'pendiente' : r?.pago_estado}`);
+      cargar();
+    } catch (err) { avisar(err.message, 'error'); } finally { setRevisando(false); }
+  };
 
   const guardar = async (e) => {
     e.preventDefault();
@@ -62,6 +74,21 @@ export default function PedidoDetalle() {
             <p className="mb-1">{pedido.cliente_nombre}<br />{pedido.cliente_correo}<br />{pedido.cliente_telefono}</p>
             <p className="small text-body-secondary mb-0">{pedido.direccion}</p>
             <p className="small text-body-secondary mb-0">Pago: {METODOS_PAGO[pedido.metodo_pago]} · {fecha(pedido.creado_en)}</p>
+            {pedido.pago_id && (
+              <div className="pago-panel">
+                <div className="d-flex justify-content-between align-items-center gap-2">
+                  <b>Openpay</b>
+                  <span className={`insignia ${pedido.pago_estado === 'completed' ? 'ok' : pedido.pago_estado === 'in_progress' ? 'bajo' : 'agotado'}`}>{ESTADO_PAGO[pedido.pago_estado] || pedido.pago_estado}</span>
+                </div>
+                <div className="small text-body-secondary">Cargo {pedido.pago_id}{pedido.pagado_en ? ` · pagado el ${fecha(pedido.pagado_en)}` : ''}</div>
+                {pedido.pago_datos?.tarjeta && <div className="small">Tarjeta {pedido.pago_datos.tarjeta.marca} terminación {pedido.pago_datos.tarjeta.ultimos4}{pedido.pago_datos.autorizacion ? ` · autorización ${pedido.pago_datos.autorizacion}` : ''}</div>}
+                {pedido.pago_datos?.clabe && <div className="small">CLABE {pedido.pago_datos.clabe} · referencia {pedido.pago_datos.referencia}</div>}
+                {!pedido.pago_datos?.clabe && pedido.pago_datos?.referencia && <div className="small">Referencia {pedido.pago_datos.referencia}</div>}
+                {pedido.estado === 'pendiente' && (
+                  <button type="button" className="btn btn-sm btn-outline-secondary mt-1" onClick={revisarPago} disabled={revisando}>{revisando ? 'Consultando…' : 'Revisar pago con Openpay'}</button>
+                )}
+              </div>
+            )}
           </form>
         </div>
       </div>
