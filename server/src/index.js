@@ -3,6 +3,7 @@ dotenv.config({ quiet: true });
 
 const { crearApp } = await import('./app.js');
 const { pool } = await import('./db.js');
+const { migrar } = await import('./migraciones.js');
 
 if (!process.env.JWT_SECRET) {
   console.error('Falta JWT_SECRET en server/.env');
@@ -14,6 +15,14 @@ try {
 } catch (error) {
   console.error('No me pude conectar a PostgreSQL. ¿Está corriendo "docker compose up -d" y coinciden las contraseñas de los dos .env?');
   console.error(error.message);
+  process.exit(1);
+}
+
+// Pone la base al día (columnas nuevas) para que un `git pull` nunca deje al servidor fallando
+try {
+  await migrar(pool);
+} catch (error) {
+  console.error('No pude actualizar la estructura de la base de datos:', error.message);
   process.exit(1);
 }
 
