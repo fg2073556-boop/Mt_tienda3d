@@ -112,6 +112,7 @@ datos/catalogo.csv     Catálogo de ejemplo en hoja de cálculo
 | `PATCH /api/admin/reposicion/productos/:id/minimo` | Ambos roles | Cambiar el mínimo de un producto |
 | `POST /api/admin/reposicion/correo` | Ambos roles | Mandar ahora el reporte de lo que falta |
 | `POST /api/admin/reposicion/mensaje` | Ambos roles | Borrador de WhatsApp para el proveedor (Gemini o mensaje base) |
+| `POST /api/admin/reposicion/whatsapp` | Ambos roles | Manda el pedido al proveedor por WhatsApp (CallMeBot o Meta) |
 | `POST /api/admin/reposicion/reponer` | Ambos roles | Registrar la llegada de varios productos a la vez |
 
 ## Reglas de negocio
@@ -154,6 +155,17 @@ SMTP_PASS=contraseña-de-aplicacion
 
 y en el panel, en **Ajustes de avisos**, el correo que recibe los avisos. Las claves nunca van en el código.
 
+### WhatsApp automático al proveedor
+
+Cuando algo se agota o llega a su mínimo, el servidor también le manda al proveedor el pedido por WhatsApp (solo lo que se acaba de acabar, con la cantidad sugerida). Desde el panel también se puede mandar directo con **Enviar por WhatsApp ahora**. Se elige el servicio con `WHATSAPP_MODO` en `server/.env`:
+
+| Modo | Para qué | Qué necesita |
+|---|---|---|
+| `callmebot` | Demo o avisos al equipo (gratis, solo uso personal) | Desde el WhatsApp que recibe, mandar *I allow callmebot to send me messages* al bot de callmebot.com y poner la llave en `WHATSAPP_CALLMEBOT_APIKEY` |
+| `meta` | Proveedor real (API oficial de WhatsApp Business) | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` y una plantilla aprobada en `WHATSAPP_PLANTILLA` con `{{1}}` proveedor y `{{2}}` lista |
+
+Sin `WHATSAPP_MODO`, el pedido se abre en WhatsApp con el texto listo para que lo envíe una persona.
+
 ## Pruebas
 
 ```bash
@@ -162,7 +174,7 @@ cd server
 DB_NAME=mt_tienda_test npm test              # PowerShell: $env:DB_NAME="mt_tienda_test"; npm test
 ```
 
-Son 20 pruebas: cuentas, catálogo, compra, stock, roles, pedidos, seguimiento, IA y reposición. Gemini y el correo se simulan en las pruebas, así que no gastan cuota ni mandan correos.
+Son 22 pruebas: cuentas, catálogo, compra, stock, roles, pedidos, seguimiento, IA, reposición y WhatsApp. Gemini, el correo y WhatsApp se simulan en las pruebas, así que no gastan cuota ni mandan correos.
 
 ## Usar la IA (Gemini)
 
